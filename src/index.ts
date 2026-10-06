@@ -214,7 +214,7 @@ const getRandomStatus = (
 
       languageSection = [
         language.name.padEnd(languageWidth),
-        generateBarChart(languagePercent, 25),
+        generateBarChart(languagePercent, 15),
         `${languagePercent.toFixed(1).padStart(5)}%`,
       ].join(' ');
     }
@@ -223,7 +223,7 @@ const getRandomStatus = (
       `${period.commits
         .toString()
         .padStart(commitWidth)} commits`,
-      generateBarChart(commitPercent, 21),
+      generateBarChart(commitPercent, 15),
       `${commitPercent.toFixed(1).padStart(5)}%`,
       period.range,
       `\u2066${period.label}\u2069`,
