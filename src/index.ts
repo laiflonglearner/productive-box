@@ -14,6 +14,11 @@ interface IRepo {
   owner: string;
 }
 
+interface ILanguage {
+  name: string;
+  bytes: number;
+}
+
 const getRandomStatus = (
   isDaytime: boolean,
   currentStatus: string,
@@ -28,22 +33,28 @@ const getRandomStatus = (
 };
 
 (async () => {
+  const octokit = new Octokit({
+    auth: `token ${process.env.GH_TOKEN}`,
+  });
+
   /**
-   * First, get user ID.
+   * Get user ID.
    */
   const userResponse = await githubQuery(userInfoQuery).catch((error) =>
     console.error(`Unable to get username and id\n${error}`),
   );
+
   const { login: username, id } = userResponse?.data?.viewer ?? {};
 
   if (!username || !id) return;
 
   /**
-   * Second, get contributed repos.
+   * Get contributed repos.
    */
   const repoInfos = await fetchContributedRepos(username).catch((error) =>
-    console.error(`Unable to get the contributed repo\n${error}`),
+    console.error(`Unable to get the contributed repos\n${error}`),
   );
+
   if (!repoInfos) return;
 
   const repos: IRepo[] = repoInfos
@@ -54,16 +65,41 @@ const getRandomStatus = (
     }));
 
   /**
-   * Third, get commit times and group by time of day.
+   * Get commit times and language data.
    */
-  const committedDatesByRepo = await Promise.all(
-    repos.map(({ name, owner }) => fetchCommittedDates(id, name, owner)),
-  ).catch((error) =>
-    console.error(`Unable to get the commit info\n${error}`),
-  );
+  const [committedDatesByRepo, languagesByRepo] = await Promise.all([
+    Promise.all(
+      repos.map(({ name, owner }) =>
+        fetchCommittedDates(id, name, owner),
+      ),
+    ),
+    Promise.all(
+      repos.map(({ name, owner }) =>
+        octokit.repos
+          .listLanguages({
+            owner,
+            repo: name,
+          })
+          .then((response) => response.data)
+          .catch((error) => {
+            console.error(
+              `Unable to get languages for ${owner}/${name}\n${error}`,
+            );
 
-  if (!committedDatesByRepo) return;
+            return {};
+          }),
+      ),
+    ),
+  ]).catch((error) => {
+    console.error(`Unable to get GitHub activity\n${error}`);
+    return [];
+  });
 
+  if (!committedDatesByRepo || !languagesByRepo) return;
+
+  /**
+   * Group commits by time of day.
+   */
   let morning = 0; // 4 - 12
   let daytime = 0; // 12 - 17
   let evening = 0; // 17 - 21
@@ -88,10 +124,39 @@ const getRandomStatus = (
   });
 
   /**
-   * Generate diagram.
+   * Aggregate languages across repositories.
    */
-  const sum = morning + daytime + evening + night;
-  if (!sum) return;
+  const languageTotals = new Map<string, number>();
+
+  languagesByRepo.forEach((languages) => {
+    Object.entries(languages).forEach(([language, bytes]) => {
+      languageTotals.set(
+        language,
+        (languageTotals.get(language) ?? 0) + bytes,
+      );
+    });
+  });
+
+  const totalLanguageBytes = Array.from(
+    languageTotals.values(),
+  ).reduce((sum, bytes) => sum + bytes, 0);
+
+  const topLanguages: ILanguage[] = Array.from(
+    languageTotals.entries(),
+  )
+    .map(([name, bytes]) => ({
+      name,
+      bytes,
+    }))
+    .sort((a, b) => b.bytes - a.bytes)
+    .slice(0, 4);
+
+  /**
+   * Generate commit diagram.
+   */
+  const totalCommits = morning + daytime + evening + night;
+
+  if (!totalCommits) return;
 
   const oneDay = [
     { label: '🥝 الصباح', range: '4-12', commits: morning },
@@ -100,27 +165,44 @@ const getRandomStatus = (
     { label: '🫐 الليل', range: '21-4', commits: night },
   ];
 
-  const lines = oneDay.reduce((prev, cur) => {
-    const percent = (cur.commits / sum) * 100;
+  /**
+   * Generate four aligned rows:
+   *
+   * commit stats | language stats
+   */
+  const lines = oneDay.map((period, index) => {
+    const commitPercent =
+      (period.commits / totalCommits) * 100;
 
-    const line = [
-      `${cur.commits.toString().padStart(5)} commits`.padEnd(14),
-      cur.range.padEnd(5),
-      generateBarChart(percent, 21),
-      String(percent.toFixed(1)).padStart(5) + '%',
-      `\u2066${cur.label}\u2069`,
-    ];
+    const commitSection = [
+      `${period.commits.toString().padStart(5)} commits`.padEnd(14),
+      period.range.padEnd(5),
+      generateBarChart(commitPercent, 21),
+      `${commitPercent.toFixed(1).padStart(5)}%`,
+      `\u2066${period.label}\u2069`,
+    ].join(' ');
 
-    return [...prev, line.join(' ')];
-  }, [] as string[]);
+    const language = topLanguages[index];
+
+    if (!language || !totalLanguageBytes) {
+      return commitSection;
+    }
+
+    const languagePercent =
+      (language.bytes / totalLanguageBytes) * 100;
+
+    const languageSection = [
+      language.name.padEnd(12),
+      generateBarChart(languagePercent, 14),
+      `${languagePercent.toFixed(1).padStart(5)}%`,
+    ].join(' ');
+
+    return `${commitSection}    ${languageSection}`;
+  });
 
   /**
    * Get profile README.
    */
-  const octokit = new Octokit({
-    auth: `token ${process.env.GH_TOKEN}`,
-  });
-
   const owner = 'laiflonglearner';
   const repo = 'laiflonglearner';
   const path = 'README.md';
@@ -148,7 +230,7 @@ const getRandomStatus = (
   ).toString('utf8');
 
   /**
-   * Find the current rotating status.
+   * Find productive-box section.
    */
   const startMarker = '<!-- productive-box:start -->';
   const endMarker = '<!-- productive-box:end -->';
@@ -156,8 +238,15 @@ const getRandomStatus = (
   const startIndex = currentContent.indexOf(startMarker);
   const endIndex = currentContent.indexOf(endMarker);
 
-  if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
-    console.error('README.md is missing the productive-box markers');
+  if (
+    startIndex === -1 ||
+    endIndex === -1 ||
+    endIndex < startIndex
+  ) {
+    console.error(
+      'README.md is missing the productive-box markers',
+    );
+
     return;
   }
 
@@ -204,7 +293,9 @@ const getRandomStatus = (
     sha: readme.data.sha,
   });
 
-  console.log(`Successfully updated productive-box: ${nextStatus} 🎉`);
+  console.log(
+    `Successfully updated productive-box: ${nextStatus} 🎉`,
+  );
 })().catch((error) => {
   console.error('Unable to update productive-box', error);
   process.exitCode = 1;
