@@ -229,7 +229,7 @@ const getRandomStatus = (
       `\u2066${period.label}\u2069`,
     ].join(' ');
 
-    return `${languageSection}    ${commitSection}`;
+    return `${languageSection}        ${commitSection}`;
   });
 
   /**
