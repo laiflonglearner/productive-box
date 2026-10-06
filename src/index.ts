@@ -166,22 +166,22 @@ const getRandomStatus = (
   const oneDay = [
     {
       label: '🥝 الصباح',
-      range: '04-12',
+      range: '4am-12pm',
       commits: morning,
     },
     {
       label: '🍊 النهار',
-      range: '12-17',
+      range: '12pm-5pm',
       commits: daytime,
     },
     {
       label: '🍓 المساء',
-      range: '17-21',
+      range: '5pm-9pm',
       commits: evening,
     },
     {
       label: '🫐 الليل',
-      range: '21-04',
+      range: '9pm-4am',
       commits: night,
     },
   ];
@@ -223,9 +223,9 @@ const getRandomStatus = (
       `${period.commits
         .toString()
         .padStart(commitWidth)} commits`,
-      period.range,
       generateBarChart(commitPercent, 21),
       `${commitPercent.toFixed(1).padStart(5)}%`,
+      period.range,
       `\u2066${period.label}\u2069`,
     ].join(' ');
 
