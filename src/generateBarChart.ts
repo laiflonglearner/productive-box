@@ -1,11 +1,8 @@
-const generateBarChart = (
+export default function generateBarChart(
   percent: number,
   length: number,
-): string => {
+): string {
   const filled = Math.round((percent / 100) * length);
-  const empty = length - filled;
 
-  return '█'.repeat(filled) + ' '.repeat(empty);
-};
-
-export default generateBarChart;
+  return '✦'.repeat(filled) + '✧'.repeat(length - filled);
+}
