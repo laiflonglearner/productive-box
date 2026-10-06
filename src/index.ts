@@ -166,22 +166,22 @@ const getRandomStatus = (
   const oneDay = [
     {
       label: '🥝 الصباح',
-      range: '4am-12pm',
+      range: ' 4am-12pm',
       commits: morning,
     },
     {
       label: '🍊 النهار',
-      range: '12pm-5pm',
+      range: '12pm- 5pm',
       commits: daytime,
     },
     {
       label: '🍓 المساء',
-      range: '5pm-9pm',
+      range: ' 5pm- 9pm',
       commits: evening,
     },
     {
       label: '🫐 الليل',
-      range: '9pm-4am',
+      range: ' 9pm- 4am',
       commits: night,
     },
   ];
