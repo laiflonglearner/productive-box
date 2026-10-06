@@ -48,26 +48,29 @@ interface IRepo {
 
   if (!committedDatesByRepo) return;
 
-  let morning = 0; // 6 - 12
-  let daytime = 0; // 12 - 18
-  let evening = 0; // 18 - 24
-  let night = 0; // 0 - 6
+  let morning = 0; // 4 - 12
+  let daytime = 0; // 12 - 17
+  let evening = 0; // 17 - 21
+  let night = 0; // 21 - 4
 
   committedDatesByRepo.forEach((committedDates) => {
     committedDates.forEach(({ committedDate }) => {
-      const timeString = new Date(committedDate).toLocaleTimeString('en-US', {
-        hour12: false,
-        timeZone: process.env.TIMEZONE,
-      });
-      const hour = +timeString.split(':')[0];
+      const hour = Number(
+        new Date(committedDate)
+          .toLocaleTimeString('en-US', {
+            hourCycle: 'h23',
+            timeZone: process.env.TIMEZONE,
+          })
+          .split(':')[0],
+      );
 
       /**
        * voting and counting
        */
-      if (hour >= 6 && hour < 12) morning++;
-      if (hour >= 12 && hour < 18) daytime++;
-      if (hour >= 18 && hour < 24) evening++;
-      if (hour >= 0 && hour < 6) night++;
+      if (hour >= 4 && hour < 12) morning++;
+      if (hour >= 12 && hour < 17) daytime++;
+      if (hour >= 17 && hour < 21) evening++;
+      if (hour >= 21 || hour < 4) night++;
     });
   });
 
