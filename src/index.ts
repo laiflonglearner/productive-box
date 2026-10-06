@@ -1,17 +1,11 @@
-
 import { Octokit } from '@octokit/rest';
 import { config } from 'dotenv';
 
 import { fetchCommittedDates, fetchContributedRepos } from './fetchPaginated.js';
+import { daytimeFilenames, nighttimeFilenames } from './filenames.js';
 import generateBarChart from './generateBarChart.js';
 import githubQuery from './githubQuery.js';
 import { userInfoQuery } from './queries.js';
-import {
-  getNextFilename,
-  initialState,
-  STATE_FILENAME,
-  type RotationState,
-} from './rotateFilename.js';
 
 /**
  * Get environment variables.
@@ -22,6 +16,20 @@ interface IRepo {
   name: string;
   owner: string;
 }
+
+const getRandomFilename = (
+  isDaytime: boolean,
+  currentFilename: string,
+): string => {
+  const filenames = isDaytime ? daytimeFilenames : nighttimeFilenames;
+
+  // Prevent the same filename from appearing twice in a row.
+  const available = filenames.filter(
+    (filename) => filename !== currentFilename,
+  );
+
+  return available[Math.floor(Math.random() * available.length)];
+};
 
 (async () => {
   /**
@@ -96,6 +104,7 @@ interface IRepo {
 
   const lines = oneDay.reduce((prev, cur) => {
     const percent = (cur.commits / sum) * 100;
+
     const line = [
       `${cur.commits.toString().padStart(5)} commits`.padEnd(14),
       generateBarChart(percent, 21),
@@ -107,102 +116,38 @@ interface IRepo {
   }, [] as string[]);
 
   /**
-   * Finally, update the Gist and filename rotation.
+   * Finally, update the Gist.
    */
-  const octokit = new Octokit({ auth: process.env.GH_TOKEN });
-  const gistId = process.env.GIST_ID;
-
-  if (!gistId) {
-    throw new Error('GIST_ID is missing');
-  }
-
-  const { data: gist } = await octokit.gists.get({
-    gist_id: gistId,
+  const octokit = new Octokit({
+    auth: `token ${process.env.GH_TOKEN}`,
   });
 
-  const files = gist.files;
+  const gist = await octokit.gists
+    .get({
+      gist_id: `${process.env.GIST_ID}`,
+    })
+    .catch((error) => console.error(`Unable to get gist\n${error}`));
 
-  if (!files) {
-    throw new Error('No files found in the gist');
+  if (!gist) return;
+
+  if (!gist.data.files) {
+    console.error('No file found in the gist');
+    return;
   }
 
-  /**
-   * Load the previous rotation state, if available.
-   */
-  let state: RotationState = initialState();
+  const currentFilename = Object.keys(gist.data.files)[0];
 
-  const stateFile = files[STATE_FILENAME];
-
-  if (stateFile) {
-    let content = stateFile.content;
-
-    // Gist responses may omit content for truncated files.
-    if (stateFile.truncated || typeof content !== 'string') {
-      if (!stateFile.raw_url) {
-        throw new Error('Rotation state content is unavailable');
-      }
-
-      const response = await fetch(stateFile.raw_url);
-
-      if (!response.ok) {
-        throw new Error('Unable to fetch rotation state');
-      }
-
-      content = await response.text();
-    }
-
-    const parsed: unknown = JSON.parse(content);
-
-    if (
-      typeof parsed !== 'object' ||
-      parsed === null ||
-      !('daytime' in parsed) ||
-      !('nighttime' in parsed) ||
-      !Array.isArray(parsed.daytime) ||
-      !Array.isArray(parsed.nighttime) ||
-      !parsed.daytime.every((item: unknown) => typeof item === 'string') ||
-      !parsed.nighttime.every((item: unknown) => typeof item === 'string')
-    ) {
-      throw new Error('Invalid rotation state');
-    }
-
-    state = {
-      daytime: parsed.daytime,
-      nighttime: parsed.nighttime,
-    };
-  }
-
-  /**
-   * Find the existing diagram, excluding the state file.
-   */
-  const filename = Object.keys(files).find(
-    (name) => name !== STATE_FILENAME,
+  const nextFilename = getRandomFilename(
+    morning + daytime > evening + night,
+    currentFilename,
   );
 
-  if (!filename) {
-    throw new Error('No diagram file found in the gist');
-  }
-
-  /**
-   * Select the animal and its next unused phrase.
-   */
-  const period =
-    morning + daytime > evening + night ? 'daytime' : 'nighttime';
-
-  const nextFilename = getNextFilename(period, state);
-
-  /**
-   * Update both files in the same Gist request.
-   */
   await octokit.gists.update({
-    gist_id: gistId,
+    gist_id: `${process.env.GIST_ID}`,
     files: {
-      [filename]: {
+      [currentFilename]: {
         filename: nextFilename,
         content: lines.join('\n'),
-      },
-      [STATE_FILENAME]: {
-        content: JSON.stringify(state, null, 2),
       },
     },
   });
