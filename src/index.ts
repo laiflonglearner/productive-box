@@ -348,8 +348,7 @@ const getLastFiveMonths = (): IMonthActivity[] => {
             {
               hourCycle: 'h23',
               timeZone:
-                process.env
-                  .TIMEZONE,
+                process.env.TIMEZONE,
             },
           )
           .split(':')[0],
@@ -442,13 +441,16 @@ const getLastFiveMonths = (): IMonthActivity[] => {
       ),
     );
 
+  /**
+   * Languages use 20 sparkles.
+   */
   const languageBarUnits =
     allocateBarUnits(
       topLanguages.map(
         (language) =>
           language.bytes,
       ),
-      15,
+      20,
     );
 
   const languageLines =
@@ -469,7 +471,7 @@ const getLastFiveMonths = (): IMonthActivity[] => {
             languageBarUnits[
               index
             ],
-            15,
+            20,
           ),
           `${percent
             .toFixed(1)
@@ -521,6 +523,16 @@ const getLastFiveMonths = (): IMonthActivity[] => {
       15,
     );
 
+  const timeCommitWidth =
+    Math.max(
+      ...oneDay.map(
+        (period) =>
+          period.commits
+            .toString()
+            .length,
+      ),
+    );
+
   const timeLines =
     oneDay.map(
       (period, index) => {
@@ -538,6 +550,11 @@ const getLastFiveMonths = (): IMonthActivity[] => {
           `${percent
             .toFixed(1)
             .padStart(5)}%`,
+          `${period.commits
+            .toString()
+            .padStart(
+              timeCommitWidth,
+            )} commits`,
           `\u2066${period.label}\u2069`,
         ].join(' ');
       },
@@ -686,7 +703,7 @@ const getLastFiveMonths = (): IMonthActivity[] => {
     );
 
   /**
-   * Last six months.
+   * Last five months.
    */
   const monthlyActivity =
     getLastFiveMonths();
@@ -788,7 +805,7 @@ const getLastFiveMonths = (): IMonthActivity[] => {
    * Languages | Time of day
    *
    * Bottom:
-   * Projects | Last six months
+   * Projects | Last five months
    */
   const topLines =
     combineColumns(
@@ -902,7 +919,7 @@ const getLastFiveMonths = (): IMonthActivity[] => {
    * Two normal fenced code blocks:
    *
    * Languages | Time of day
-   * Projects  | Last six months
+   * Projects  | Last five months
    */
   const generatedBlock = [
     startMarker,
