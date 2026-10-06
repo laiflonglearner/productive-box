@@ -224,7 +224,7 @@ const getRandomStatus = (
         .toString()
         .padStart(commitWidth)} commits`,
       period.range,
-      generateBarChart(commitPercent, 25),
+      generateBarChart(commitPercent, 21),
       `${commitPercent.toFixed(1).padStart(5)}%`,
       `\u2066${period.label}\u2069`,
     ].join(' ');
