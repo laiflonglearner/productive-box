@@ -82,7 +82,7 @@ interface IRepo {
 
   const oneDay = [
     { label: '🌞 الصباح', commits: morning },
-    { label: '🌤️ النهار', commits: daytime },
+    { label: '☀️ النهار', commits: daytime },
     { label: '🌕 المساء', commits: evening },
     { label: '🌝 الليل', commits: night },
   ];
