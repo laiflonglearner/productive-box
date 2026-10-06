@@ -138,17 +138,35 @@ const generateSparkleBar = (
   '✧'.repeat(length - filled);
 
 /**
- * Preserve alignment inside <code>.
- *
- * HTML collapses normal spaces, so convert them to
- * non-breaking spaces before inserting each line.
+ * Combine two sets of lines into fixed-width columns.
  */
-const preserveSpaces = (
-  line: string,
-): string =>
-  line.replace(/ /g, '&nbsp;');
+const combineColumns = (
+  leftLines: string[],
+  rightLines: string[],
+  gap = 8,
+): string[] => {
+  const leftWidth = Math.max(
+    0,
+    ...leftLines.map((line) => line.length),
+  );
 
-const getLastSixMonths = (): IMonthActivity[] => {
+  const rowCount = Math.max(
+    leftLines.length,
+    rightLines.length,
+  );
+
+  return Array.from(
+    { length: rowCount },
+    (_, index) => {
+      const left = leftLines[index] ?? '';
+      const right = rightLines[index] ?? '';
+
+      return `${left.padEnd(leftWidth)}${' '.repeat(gap)}${right}`;
+    },
+  );
+};
+
+const getLastFiveMonths = (): IMonthActivity[] => {
   const formatter =
     new Intl.DateTimeFormat(
       'en-US',
@@ -163,9 +181,9 @@ const getLastSixMonths = (): IMonthActivity[] => {
   const now = new Date();
 
   return Array.from(
-    { length: 6 },
+    { length: 5 },
     (_, index) => {
-      const monthsAgo = 5 - index;
+      const monthsAgo = 4 - index;
 
       const date = new Date(
         Date.UTC(
@@ -310,7 +328,9 @@ const getLastSixMonths = (): IMonthActivity[] => {
         committedDates,
     );
 
-  // Time-of-day activity
+  /**
+   * Time-of-day activity.
+   */
   let morning = 0;
   let daytime = 0;
   let evening = 0;
@@ -362,7 +382,9 @@ const getLastSixMonths = (): IMonthActivity[] => {
     },
   );
 
-  // Languages
+  /**
+   * Languages.
+   */
   const languageTotals =
     new Map<string, number>();
 
@@ -453,7 +475,9 @@ const getLastSixMonths = (): IMonthActivity[] => {
       },
     );
 
-  // Time of day
+  /**
+   * Time of day.
+   */
   const totalCommits =
     morning +
     daytime +
@@ -516,7 +540,9 @@ const getLastSixMonths = (): IMonthActivity[] => {
       },
     );
 
-  // Projects
+  /**
+   * Projects.
+   */
   const projectActivity: IProjectActivity[] =
     projects
       .map((project) => {
@@ -656,9 +682,11 @@ const getLastSixMonths = (): IMonthActivity[] => {
       },
     );
 
-  // Last six months
+  /**
+   * Last six months.
+   */
   const monthlyActivity =
-    getLastSixMonths();
+    getLastFiveMonths();
 
   const monthFormatter =
     new Intl.DateTimeFormat(
@@ -750,7 +778,30 @@ const getLastSixMonths = (): IMonthActivity[] => {
       },
     );
 
-  // Profile README
+  /**
+   * Combine dashboard columns.
+   *
+   * Top:
+   * Languages | Time of day
+   *
+   * Bottom:
+   * Projects | Last six months
+   */
+  const topLines =
+    combineColumns(
+      languageLines,
+      timeLines,
+    );
+
+  const bottomLines =
+    combineColumns(
+      projectLines,
+      monthLines,
+    );
+
+  /**
+   * Profile README.
+   */
   const owner =
     'laiflonglearner';
 
@@ -843,13 +894,14 @@ const getLastSixMonths = (): IMonthActivity[] => {
     );
 
   /**
-   * 2×2 dashboard.
+   * Generate dashboard.
    *
-   * <code> avoids the rounded <pre> blocks.
-   * <br> preserves rows.
-   * &nbsp; preserves column alignment.
+   * Two normal fenced code blocks:
+   *
+   * Languages | Time of day
+   * Projects  | Last six months
    */
-    const generatedBlock = [
+  const generatedBlock = [
     startMarker,
     '<div align="center">',
     '',
@@ -857,40 +909,13 @@ const getLastSixMonths = (): IMonthActivity[] => {
     '',
     '</div>',
     '',
-    '<table>',
-    '<tr>',
-    '<td valign="top">',
-    '<code>',
-    ...languageLines.map(
-      (line) => `${preserveSpaces(line)}<br>`,
-    ),
-    '</code>',
-    '</td>',
-    '<td valign="top">',
-    '<code>',
-    ...timeLines.map(
-      (line) => `${preserveSpaces(line)}<br>`,
-    ),
-    '</code>',
-    '</td>',
-    '</tr>',
-    '<tr>',
-    '<td valign="top">',
-    '<code>',
-    ...projectLines.map(
-      (line) => `${preserveSpaces(line)}<br>`,
-    ),
-    '</code>',
-    '</td>',
-    '<td valign="top">',
-    '<code>',
-    ...monthLines.map(
-      (line) => `${preserveSpaces(line)}<br>`,
-    ),
-    '</code>',
-    '</td>',
-    '</tr>',
-    '</table>',
+    '```text',
+    ...topLines,
+    '```',
+    '',
+    '```text',
+    ...bottomLines,
+    '```',
     endMarker,
   ].join('\n');
 
