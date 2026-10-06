@@ -7,9 +7,6 @@ import generateBarChart from './generateBarChart.js';
 import githubQuery from './githubQuery.js';
 import { userInfoQuery } from './queries.js';
 
-/**
- * Get environment variables.
- */
 config({ path: ['.env'] });
 
 interface IRepo {
@@ -23,8 +20,9 @@ const getRandomStatus = (
 ): string => {
   const statuses = isDaytime ? daytimeFilenames : nighttimeFilenames;
 
-  // Prevent the same status from appearing twice in a row.
-  const available = statuses.filter((status) => status !== currentStatus);
+  const available = statuses.filter(
+    (status) => status !== currentStatus,
+  );
 
   return available[Math.floor(Math.random() * available.length)];
 };
@@ -60,7 +58,9 @@ const getRandomStatus = (
    */
   const committedDatesByRepo = await Promise.all(
     repos.map(({ name, owner }) => fetchCommittedDates(id, name, owner)),
-  ).catch((error) => console.error(`Unable to get the commit info\n${error}`));
+  ).catch((error) =>
+    console.error(`Unable to get the commit info\n${error}`),
+  );
 
   if (!committedDatesByRepo) return;
 
@@ -148,14 +148,26 @@ const getRandomStatus = (
   ).toString('utf8');
 
   /**
-   * Get the current rotating status from the generated section,
-   * then choose a different one for this update.
+   * Find the current rotating status.
    */
-  const statusMatch = currentContent.match(
-    /<!-- gen:commits:status -->(.*?)<!-- gen:commits:status:end -->/s,
+  const startMarker = '<!-- productive-box:start -->';
+  const endMarker = '<!-- productive-box:end -->';
+
+  const startIndex = currentContent.indexOf(startMarker);
+  const endIndex = currentContent.indexOf(endMarker);
+
+  if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
+    console.error('README.md is missing the productive-box markers');
+    return;
+  }
+
+  const currentBlock = currentContent.slice(
+    startIndex + startMarker.length,
+    endIndex,
   );
 
-  const currentStatus = statusMatch?.[1]?.trim() ?? '';
+  const currentStatus =
+    currentBlock.match(/^### (.+)$/m)?.[1]?.trim() ?? '';
 
   const nextStatus = getRandomStatus(
     morning + daytime > evening + night,
@@ -163,30 +175,17 @@ const getRandomStatus = (
   );
 
   /**
-   * Generate README section.
+   * Generate productive-box section.
    */
-  const startMarker = '<!-- gen:commits:start -->';
-  const endMarker = '<!-- gen:commits:end -->';
-
   const generated = [
     startMarker,
-    '<!-- gen:commits:status -->',
     `### ${nextStatus}`,
-    '<!-- gen:commits:status:end -->',
     '',
     '```text',
     ...lines,
     '```',
     endMarker,
   ].join('\n');
-
-  const startIndex = currentContent.indexOf(startMarker);
-  const endIndex = currentContent.indexOf(endMarker);
-
-  if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
-    console.error('README.md is missing the commit stats markers');
-    return;
-  }
 
   const nextContent =
     currentContent.slice(0, startIndex) +
@@ -200,13 +199,13 @@ const getRandomStatus = (
     owner,
     repo,
     path,
-    message: 'chore: update commit stats',
+    message: 'chore: update productive box',
     content: Buffer.from(nextContent).toString('base64'),
     sha: readme.data.sha,
   });
 
-  console.log(`Successfully updated profile README: ${nextStatus} 🎉`);
+  console.log(`Successfully updated productive-box: ${nextStatus} 🎉`);
 })().catch((error) => {
-  console.error('Unable to update profile README', error);
+  console.error('Unable to update productive-box', error);
   process.exitCode = 1;
 });
