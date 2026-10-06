@@ -120,7 +120,7 @@ interface IRepo {
     gist_id: `${process.env.GIST_ID}`,
     files: {
       [filename]: {
-        filename: morning + daytime > evening + night ? 'I’m a baby 🕊️' : 'I’m a baby 🦉',
+        filename: morning + daytime > evening + night ? 'I’m a baby 🐥' : 'I’m a baby 🦔',
         content: lines.join('\n'),
       },
     },
