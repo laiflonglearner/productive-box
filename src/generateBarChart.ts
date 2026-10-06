@@ -1,9 +1,11 @@
-/**
- * clone from https://github.com/matchai/waka-box
- * modified to draw whole cells only, see the commit message for why
- */
-export default function generateBarChart(percent: number, size: number) {
-  const filled = Math.min(size, Math.round((size * percent) / 100));
+const generateBarChart = (
+  percent: number,
+  length: number,
+): string => {
+  const filled = Math.round((percent / 100) * length);
+  const empty = length - filled;
 
-  return '█'.repeat(filled).padEnd(size, '░');
-}
+  return '█'.repeat(filled) + '░'.repeat(empty);
+};
+
+export default generateBarChart;
