@@ -52,22 +52,22 @@ interface IMonthActivity {
 
 const projects: IProject[] = [
   {
-    name: 'lifelong-habit',
+    name: '🌿 lifelong-habit',
     repos: [
       'lifelong-habit',
       'lifelong-habit-app',
     ],
   },
   {
-    name: 'laiflonglearner.com',
+    name: '🪶 laiflonglearner.com',
     repos: ['laiflonglearner.com'],
   },
   {
-    name: 'productive-box',
+    name: '🧮 productive-box',
     repos: ['productive-box'],
   },
   {
-    name: 'sleeby',
+    name: '🌙 sleeby',
     repos: ['sleeby'],
   },
 ];
@@ -630,7 +630,7 @@ const getLastFiveMonths = (): IMonthActivity[] => {
 
   if (otherCommits > 0) {
     projectActivity.push({
-      name: 'other',
+      name: '🧶 other',
       commits: otherCommits,
     });
   }
