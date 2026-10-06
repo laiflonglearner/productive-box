@@ -534,31 +534,33 @@ const getLastFiveMonths = (): IMonthActivity[] => {
     );
 
   const timeLines =
-    oneDay.map(
-      (period, index) => {
-        const percent =
-          (period.commits /
-            totalCommits) *
-          100;
+  oneDay.map(
+    (period, index) => {
+      const percent =
+        (period.commits /
+          totalCommits) *
+        100;
 
-        return [
-          period.range.padEnd(7),
-          generateSparkleBar(
-            timeBarUnits[index],
-            15,
-          ),
-          `${percent
-            .toFixed(1)
-            .padStart(5)}%`,
-          `${period.commits
-            .toString()
-            .padStart(
-              timeCommitWidth,
-            )} commits`,
-          `\u2066${period.label}\u2069`,
-        ].join(' ');
-      },
-    );
+      return [
+        `${period.commits
+          .toString()
+          .padStart(
+            timeCommitWidth,
+          )} commits`,
+        `${percent
+          .toFixed(1)
+          .padStart(5)}%`,
+        generateSparkleBar(
+          timeBarUnits[index],
+          15,
+        ),
+        `\u2066${period.label.split(' ')[0]} ${period.range} ${period.label
+          .split(' ')
+          .slice(1)
+          .join(' ')}\u2069`,
+      ].join(' ');
+    },
+  );
 
   /**
    * Projects.
