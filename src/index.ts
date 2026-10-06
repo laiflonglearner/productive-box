@@ -1,9 +1,10 @@
 import { Octokit } from '@octokit/rest';
 import { config } from 'dotenv';
 
+import { fetchCommittedDates, fetchContributedRepos } from './fetchPaginated.js';
 import generateBarChart from './generateBarChart.js';
 import githubQuery from './githubQuery.js';
-import { createCommittedDateQuery, createContributedRepoQuery, userInfoQuery } from './queries.js';
+import { userInfoQuery } from './queries.js';
 /**
  * get environment variable
  */
@@ -12,20 +13,6 @@ config({ path: ['.env'] });
 interface IRepo {
   name: string;
   owner: string;
-}
-
-interface RepoInfo {
-  name: string;
-  owner: {
-    login: string;
-  };
-  isFork: boolean;
-}
-
-interface Edge {
-  node: {
-    committedDate: string;
-  };
 }
 
 (async () => {
@@ -40,22 +27,14 @@ interface Edge {
   /**
    * Second, get contributed repos
    */
-  const contributedRepoQuery = createContributedRepoQuery(username);
-  const repoResponse = await githubQuery(contributedRepoQuery).catch((error) =>
+  const repoInfos = await fetchContributedRepos(username).catch((error) =>
     console.error(`Unable to get the contributed repo\n${error}`),
   );
+  if (!repoInfos) return;
 
-  /**
-   * If the token is invalid, stop the process
-   */
-  if (repoResponse.message === 'Bad credentials') {
-    console.error('Invalid GitHub token. Please renew the GH_TOKEN');
-    return;
-  }
-
-  const repos: IRepo[] = repoResponse?.data?.user?.repositoriesContributedTo?.nodes
-    .filter((repoInfo: RepoInfo) => !repoInfo?.isFork)
-    .map((repoInfo: RepoInfo) => ({
+  const repos: IRepo[] = repoInfos
+    .filter((repoInfo) => !repoInfo?.isFork)
+    .map((repoInfo) => ({
       name: repoInfo?.name,
       owner: repoInfo?.owner?.login,
     }));
@@ -63,20 +42,19 @@ interface Edge {
   /**
    * Third, get commit time and parse into commit-time/hour diagram
    */
-  const committedTimeResponseMap = await Promise.all(
-    repos.map(({ name, owner }) => githubQuery(createCommittedDateQuery(id, name, owner))),
+  const committedDatesByRepo = await Promise.all(
+    repos.map(({ name, owner }) => fetchCommittedDates(id, name, owner)),
   ).catch((error) => console.error(`Unable to get the commit info\n${error}`));
 
-  if (!committedTimeResponseMap) return;
+  if (!committedDatesByRepo) return;
 
   let morning = 0; // 6 - 12
   let daytime = 0; // 12 - 18
   let evening = 0; // 18 - 24
   let night = 0; // 0 - 6
 
-  committedTimeResponseMap.forEach((committedTimeResponse) => {
-    committedTimeResponse?.data?.repository?.defaultBranchRef?.target?.history?.edges.forEach((edge: Edge) => {
-      const committedDate = edge?.node?.committedDate;
+  committedDatesByRepo.forEach((committedDates) => {
+    committedDates.forEach(({ committedDate }) => {
       const timeString = new Date(committedDate).toLocaleTimeString('en-US', {
         hour12: false,
         timeZone: process.env.TIMEZONE,
@@ -139,7 +117,7 @@ interface Edge {
     gist_id: `${process.env.GIST_ID}`,
     files: {
       [filename]: {
-        filename: morning + daytime > evening + night ? 'I’m a baby 🐤' : 'I’m a baby 🦉',
+        filename: morning + daytime > evening + night ? 'I’m a baby 🕊️' : 'I’m a baby 🦉',
         content: lines.join('\n'),
       },
     },
