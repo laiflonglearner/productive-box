@@ -850,49 +850,41 @@ const getLastSixMonths = (): IMonthActivity[] => {
    * &nbsp; preserves column alignment.
    */
   const generatedBlock = [
-    startMarker,
-    '<div align="center">',
-    '',
-    `### ${nextStatus}`,
-    '',
-    '</div>',
-    '',
-    '<table>',
-    '<tr>',
-    '<td valign="top">',
-    '<code>',
-    languageLines
-      .map(preserveSpaces)
-      .join('<br>'),
-    '</code>',
-    '</td>',
-    '<td valign="top">',
-    '<code>',
-    timeLines
-      .map(preserveSpaces)
-      .join('<br>'),
-    '</code>',
-    '</td>',
-    '</tr>',
-    '<tr>',
-    '<td valign="top">',
-    '<code>',
-    projectLines
-      .map(preserveSpaces)
-      .join('<br>'),
-    '</code>',
-    '</td>',
-    '<td valign="top">',
-    '<code>',
-    monthLines
-      .map(preserveSpaces)
-      .join('<br>'),
-    '</code>',
-    '</td>',
-    '</tr>',
-    '</table>',
-    endMarker,
-  ].join('\n');
+  startMarker,
+  '<div align="center">',
+  '',
+  `### ${nextStatus}`,
+  '',
+  '</div>',
+  '',
+  '<table>',
+  '<tr>',
+  '<td valign="top">',
+  '<pre>',
+  ...languageLines,
+  '</pre>',
+  '</td>',
+  '<td valign="top">',
+  '<pre>',
+  ...timeLines,
+  '</pre>',
+  '</td>',
+  '</tr>',
+  '<tr>',
+  '<td valign="top">',
+  '<pre>',
+  ...projectLines,
+  '</pre>',
+  '</td>',
+  '<td valign="top">',
+  '<pre>',
+  ...monthLines,
+  '</pre>',
+  '</td>',
+  '</tr>',
+  '</table>',
+  endMarker,
+].join('\n');
 
   const updatedReadme =
     currentReadme.slice(
