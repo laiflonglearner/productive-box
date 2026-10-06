@@ -53,7 +53,10 @@ interface IMonthActivity {
 const projects: IProject[] = [
   {
     name: 'Lifelong Habit',
-    repos: ['lifelong-habit'],
+    repos: [
+      'lifelong-habit',
+      'lifelong-habit-app',
+    ],
   },
   {
     name: 'laiflonglearner.com',
