@@ -63,6 +63,10 @@ const projects: IProject[] = [
     name: 'productive-box',
     repos: ['productive-box'],
   },
+  {
+    name: 'sleeby',
+    repos: ['sleeby'],
+  },
 ];
 
 const getRandomStatus = (
@@ -133,15 +137,28 @@ const generateSparkleBar = (
   '✦'.repeat(filled) +
   '✧'.repeat(length - filled);
 
+/**
+ * Preserve alignment inside <code>.
+ *
+ * HTML collapses normal spaces, so convert them to
+ * non-breaking spaces before inserting each line.
+ */
+const preserveSpaces = (
+  line: string,
+): string =>
+  line.replace(/ /g, '&nbsp;');
+
 const getLastSixMonths = (): IMonthActivity[] => {
-  const formatter = new Intl.DateTimeFormat(
-    'en-US',
-    {
-      month: 'short',
-      year: 'numeric',
-      timeZone: process.env.TIMEZONE,
-    },
-  );
+  const formatter =
+    new Intl.DateTimeFormat(
+      'en-US',
+      {
+        month: 'short',
+        year: '2-digit',
+        timeZone:
+          process.env.TIMEZONE,
+      },
+    );
 
   const now = new Date();
 
@@ -153,7 +170,8 @@ const getLastSixMonths = (): IMonthActivity[] => {
       const date = new Date(
         Date.UTC(
           now.getUTCFullYear(),
-          now.getUTCMonth() - monthsAgo,
+          now.getUTCMonth() -
+            monthsAgo,
           15,
           12,
         ),
@@ -163,16 +181,18 @@ const getLastSixMonths = (): IMonthActivity[] => {
         formatter.formatToParts(date);
 
       const month = parts.find(
-        (part) => part.type === 'month',
+        (part) =>
+          part.type === 'month',
       )?.value;
 
       const year = parts.find(
-        (part) => part.type === 'year',
+        (part) =>
+          part.type === 'year',
       )?.value;
 
       return {
         key: `${year}-${month}`,
-        label: month ?? '',
+        label: `${month} '${year}`,
         commits: 0,
       };
     },
@@ -184,13 +204,14 @@ const getLastSixMonths = (): IMonthActivity[] => {
     auth: `token ${process.env.GH_TOKEN}`,
   });
 
-  const userResponse = await githubQuery(
-    userInfoQuery,
-  ).catch((error) =>
-    console.error(
-      `Unable to get username and id\n${error}`,
-    ),
-  );
+  const userResponse =
+    await githubQuery(
+      userInfoQuery,
+    ).catch((error) =>
+      console.error(
+        `Unable to get username and id\n${error}`,
+      ),
+    );
 
   const { login: username, id } =
     userResponse?.data?.viewer ?? {};
@@ -208,18 +229,23 @@ const getLastSixMonths = (): IMonthActivity[] => {
 
   if (!repoInfos) return;
 
-  // Include normal repositories and productive-box.
-  // Other forks remain excluded.
-  const repos: IRepo[] = repoInfos
-    .filter(
-      (repoInfo) =>
-        !repoInfo?.isFork ||
-        repoInfo?.name === 'productive-box',
-    )
-    .map((repoInfo) => ({
-      name: repoInfo?.name,
-      owner: repoInfo?.owner?.login,
-    }));
+  /**
+   * Include normal repositories and productive-box.
+   * Other forks remain excluded.
+   */
+  const repos: IRepo[] =
+    repoInfos
+      .filter(
+        (repoInfo) =>
+          !repoInfo?.isFork ||
+          repoInfo?.name ===
+            'productive-box',
+      )
+      .map((repoInfo) => ({
+        name: repoInfo?.name,
+        owner:
+          repoInfo?.owner?.login,
+      }));
 
   let repoActivity: IRepoActivity[];
   let languagesByRepo: Record<
@@ -228,10 +254,13 @@ const getLastSixMonths = (): IMonthActivity[] => {
   >[];
 
   try {
-    [repoActivity, languagesByRepo] =
-      await Promise.all([
-        Promise.all(
-          repos.map(async (repo) => ({
+    [
+      repoActivity,
+      languagesByRepo,
+    ] = await Promise.all([
+      Promise.all(
+        repos.map(
+          async (repo) => ({
             repo,
             committedDates:
               await fetchCommittedDates(
@@ -239,11 +268,13 @@ const getLastSixMonths = (): IMonthActivity[] => {
                 repo.name,
                 repo.owner,
               ),
-          })),
+          }),
         ),
+      ),
 
-        Promise.all(
-          repos.map(({ name, owner }) =>
+      Promise.all(
+        repos.map(
+          ({ name, owner }) =>
             octokit.repos
               .listLanguages({
                 owner,
@@ -253,16 +284,18 @@ const getLastSixMonths = (): IMonthActivity[] => {
                 (response) =>
                   response.data,
               )
-              .catch((error) => {
-                console.error(
-                  `Unable to get languages for ${owner}/${name}\n${error}`,
-                );
+              .catch(
+                (error) => {
+                  console.error(
+                    `Unable to get languages for ${owner}/${name}\n${error}`,
+                  );
 
-                return {};
-              }),
-          ),
+                  return {};
+                },
+              ),
         ),
-      ]);
+      ),
+    ]);
   } catch (error) {
     console.error(
       `Unable to get GitHub activity\n${error}`,
@@ -287,27 +320,43 @@ const getLastSixMonths = (): IMonthActivity[] => {
     ({ committedDate }) => {
       const hour = Number(
         new Date(committedDate)
-          .toLocaleTimeString('en-US', {
-            hourCycle: 'h23',
-            timeZone:
-              process.env.TIMEZONE,
-          })
+          .toLocaleTimeString(
+            'en-US',
+            {
+              hourCycle: 'h23',
+              timeZone:
+                process.env
+                  .TIMEZONE,
+            },
+          )
           .split(':')[0],
       );
 
-      if (hour >= 4 && hour < 13) {
+      if (
+        hour >= 4 &&
+        hour < 13
+      ) {
         morning++;
       }
 
-      if (hour >= 13 && hour < 17) {
+      if (
+        hour >= 13 &&
+        hour < 17
+      ) {
         daytime++;
       }
 
-      if (hour >= 17 && hour < 21) {
+      if (
+        hour >= 17 &&
+        hour < 21
+      ) {
         evening++;
       }
 
-      if (hour >= 21 || hour < 4) {
+      if (
+        hour >= 21 ||
+        hour < 4
+      ) {
         night++;
       }
     },
@@ -319,7 +368,9 @@ const getLastSixMonths = (): IMonthActivity[] => {
 
   languagesByRepo.forEach(
     (languages) => {
-      Object.entries(languages).forEach(
+      Object.entries(
+        languages,
+      ).forEach(
         ([language, bytes]) => {
           languageTotals.set(
             language,
@@ -336,7 +387,8 @@ const getLastSixMonths = (): IMonthActivity[] => {
     Array.from(
       languageTotals.values(),
     ).reduce(
-      (sum, bytes) => sum + bytes,
+      (sum, bytes) =>
+        sum + bytes,
       0,
     );
 
@@ -344,22 +396,26 @@ const getLastSixMonths = (): IMonthActivity[] => {
     Array.from(
       languageTotals.entries(),
     )
-      .map(([name, bytes]) => ({
-        name,
-        bytes,
-      }))
+      .map(
+        ([name, bytes]) => ({
+          name,
+          bytes,
+        }),
+      )
       .sort(
-        (a, b) => b.bytes - a.bytes,
+        (a, b) =>
+          b.bytes - a.bytes,
       )
       .slice(0, 4);
 
-  const languageWidth = Math.max(
-    0,
-    ...topLanguages.map(
-      (language) =>
-        language.name.length,
-    ),
-  );
+  const languageWidth =
+    Math.max(
+      0,
+      ...topLanguages.map(
+        (language) =>
+          language.name.length,
+      ),
+    );
 
   const languageBarUnits =
     allocateBarUnits(
@@ -385,7 +441,9 @@ const getLastSixMonths = (): IMonthActivity[] => {
             languageWidth,
           ),
           generateSparkleBar(
-            languageBarUnits[index],
+            languageBarUnits[
+              index
+            ],
             15,
           ),
           `${percent
@@ -430,33 +488,33 @@ const getLastSixMonths = (): IMonthActivity[] => {
   const timeBarUnits =
     allocateBarUnits(
       oneDay.map(
-        (period) => period.commits,
+        (period) =>
+          period.commits,
       ),
       15,
     );
 
-  // Raw commit counts are intentionally omitted here
-  // to keep the side-by-side layout compact.
-  const timeLines = oneDay.map(
-    (period, index) => {
-      const percent =
-        (period.commits /
-          totalCommits) *
-        100;
+  const timeLines =
+    oneDay.map(
+      (period, index) => {
+        const percent =
+          (period.commits /
+            totalCommits) *
+          100;
 
-      return [
-        period.range.padEnd(7),
-        generateSparkleBar(
-          timeBarUnits[index],
-          15,
-        ),
-        `${percent
-          .toFixed(1)
-          .padStart(5)}%`,
-        `\u2066${period.label}\u2069`,
-      ].join(' ');
-    },
-  );
+        return [
+          period.range.padEnd(7),
+          generateSparkleBar(
+            timeBarUnits[index],
+            15,
+          ),
+          `${percent
+            .toFixed(1)
+            .padStart(5)}%`,
+          `\u2066${period.label}\u2069`,
+        ].join(' ');
+      },
+    );
 
   // Projects
   const projectActivity: IProjectActivity[] =
@@ -464,15 +522,18 @@ const getLastSixMonths = (): IMonthActivity[] => {
       .map((project) => {
         const commits =
           repoActivity
-            .filter(({ repo }) =>
-              project.repos.includes(
-                repo.name,
-              ),
+            .filter(
+              ({ repo }) =>
+                project.repos.includes(
+                  repo.name,
+                ),
             )
             .reduce(
               (
                 sum,
-                { committedDates },
+                {
+                  committedDates,
+                },
               ) =>
                 sum +
                 committedDates.length,
@@ -529,7 +590,8 @@ const getLastSixMonths = (): IMonthActivity[] => {
   const totalProjectCommits =
     projectActivity.reduce(
       (sum, project) =>
-        sum + project.commits,
+        sum +
+        project.commits,
       0,
     );
 
@@ -577,7 +639,9 @@ const getLastSixMonths = (): IMonthActivity[] => {
             projectNameWidth,
           ),
           generateSparkleBar(
-            projectBarUnits[index],
+            projectBarUnits[
+              index
+            ],
             15,
           ),
           `${percent
@@ -601,7 +665,7 @@ const getLastSixMonths = (): IMonthActivity[] => {
       'en-US',
       {
         month: 'short',
-        year: 'numeric',
+        year: '2-digit',
         timeZone:
           process.env.TIMEZONE,
       },
@@ -672,7 +736,7 @@ const getLastSixMonths = (): IMonthActivity[] => {
             : 0;
 
         return [
-          month.label.padEnd(3),
+          month.label.padEnd(7),
           generateBarChart(
             percentOfMax,
             15,
@@ -779,12 +843,13 @@ const getLastSixMonths = (): IMonthActivity[] => {
     );
 
   /**
-   * 2×2 dashboard:
+   * 2×2 dashboard.
    *
-   * Languages     | Time of day
-   * Projects      | Last 6 months
+   * <code> avoids the rounded <pre> blocks.
+   * <br> preserves rows.
+   * &nbsp; preserves column alignment.
    */
-    const generatedBlock = [
+  const generatedBlock = [
     startMarker,
     '<div align="center">',
     '',
@@ -796,24 +861,32 @@ const getLastSixMonths = (): IMonthActivity[] => {
     '<tr>',
     '<td valign="top">',
     '<code>',
-    languageLines.join('<br>'),
+    languageLines
+      .map(preserveSpaces)
+      .join('<br>'),
     '</code>',
     '</td>',
     '<td valign="top">',
     '<code>',
-    timeLines.join('<br>'),
+    timeLines
+      .map(preserveSpaces)
+      .join('<br>'),
     '</code>',
     '</td>',
     '</tr>',
     '<tr>',
     '<td valign="top">',
     '<code>',
-    projectLines.join('<br>'),
+    projectLines
+      .map(preserveSpaces)
+      .join('<br>'),
     '</code>',
     '</td>',
     '<td valign="top">',
     '<code>',
-    monthLines.join('<br>'),
+    monthLines
+      .map(preserveSpaces)
+      .join('<br>'),
     '</code>',
     '</td>',
     '</tr>',
