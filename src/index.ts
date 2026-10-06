@@ -100,10 +100,10 @@ interface Edge {
   if (!sum) return;
 
   const oneDay = [
-    { label: '🌞 Morning', commits: morning },
-    { label: '🌆 Daytime', commits: daytime },
-    { label: '🌃 Evening', commits: evening },
-    { label: '🌙 Night', commits: night },
+    { label: '🌞 الصباح', commits: morning },
+    { label: '🌆 النهار', commits: daytime },
+    { label: '🌃 المساء', commits: evening },
+    { label: '🌙 الليل', commits: night },
   ];
 
   const lines = oneDay.reduce((prev, cur) => {
