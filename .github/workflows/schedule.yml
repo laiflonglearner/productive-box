@@ -1,21 +1,21 @@
-name: Update gist
+name: Update README
 
 on:
   repository_dispatch:
     types: [build-event]
   schedule:
     - cron: "0 */4 * * *"
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
 jobs:
-  update-gist:
+  update-readme:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
-      - name: Update gist
+
+      - name: Update README
         uses: ./
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          GIST_ID: ${{ secrets.GIST_ID }}
           TIMEZONE: ${{ vars.TIMEZONE }}
