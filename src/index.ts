@@ -50,12 +50,6 @@ interface IMonthActivity {
   commits: number;
 }
 
-/**
- * Portfolio projects.
- *
- * Add more repository names to `repos` if one project
- * spans multiple repositories.
- */
 const projects: IProject[] = [
   {
     name: 'Lifelong Habit',
@@ -90,13 +84,6 @@ const getRandomStatus = (
   return pool[Math.floor(Math.random() * pool.length)];
 };
 
-/**
- * Allocate a fixed number of filled characters across
- * an entire distribution.
- *
- * This uses largest-remainder allocation so all rows
- * together contain exactly `totalUnits` filled characters.
- */
 const allocateBarUnits = (
   values: number[],
   totalUnits: number,
@@ -139,10 +126,6 @@ const allocateBarUnits = (
   return units;
 };
 
-/**
- * Generate a fixed-length sparkle bar using an exact
- * number of filled units.
- */
 const generateSparkleBar = (
   filled: number,
   length: number,
@@ -150,9 +133,6 @@ const generateSparkleBar = (
   '✦'.repeat(filled) +
   '✧'.repeat(length - filled);
 
-/**
- * Get the current month and previous five months.
- */
 const getLastSixMonths = (): IMonthActivity[] => {
   const formatter = new Intl.DateTimeFormat(
     'en-US',
@@ -204,9 +184,6 @@ const getLastSixMonths = (): IMonthActivity[] => {
     auth: `token ${process.env.GH_TOKEN}`,
   });
 
-  /**
-   * Get user ID and username.
-   */
   const userResponse = await githubQuery(
     userInfoQuery,
   ).catch((error) =>
@@ -220,9 +197,6 @@ const getLastSixMonths = (): IMonthActivity[] => {
 
   if (!username || !id) return;
 
-  /**
-   * Get contributed repositories.
-   */
   const repoInfos =
     await fetchContributedRepos(
       username,
@@ -234,13 +208,8 @@ const getLastSixMonths = (): IMonthActivity[] => {
 
   if (!repoInfos) return;
 
-  /**
-   * Include:
-   * - normal non-fork repositories
-   * - our productive-box fork
-   *
-   * Exclude all other forks.
-   */
+  // Include normal repositories and productive-box.
+  // Other forks remain excluded.
   const repos: IRepo[] = repoInfos
     .filter(
       (repoInfo) =>
@@ -252,9 +221,6 @@ const getLastSixMonths = (): IMonthActivity[] => {
       owner: repoInfo?.owner?.login,
     }));
 
-  /**
-   * Get commit dates and language data.
-   */
   let repoActivity: IRepoActivity[];
   let languagesByRepo: Record<
     string,
@@ -305,24 +271,13 @@ const getLastSixMonths = (): IMonthActivity[] => {
     return;
   }
 
-  /**
-   * Flatten commit dates for statistics that do not
-   * need repository identity.
-   */
   const allCommittedDates =
     repoActivity.flatMap(
       ({ committedDates }) =>
         committedDates,
     );
 
-  /**
-   * Group commits by time of day.
-   *
-   * 04:00–12:59 → morning
-   * 13:00–16:59 → daytime
-   * 17:00–20:59 → evening
-   * 21:00–03:59 → night
-   */
+  // Time-of-day activity
   let morning = 0;
   let daytime = 0;
   let evening = 0;
@@ -358,9 +313,7 @@ const getLastSixMonths = (): IMonthActivity[] => {
     },
   );
 
-  /**
-   * Aggregate language bytes across repositories.
-   */
+  // Languages
   const languageTotals =
     new Map<string, number>();
 
@@ -400,9 +353,6 @@ const getLastSixMonths = (): IMonthActivity[] => {
       )
       .slice(0, 4);
 
-  /**
-   * Language chart.
-   */
   const languageWidth = Math.max(
     0,
     ...topLanguages.map(
@@ -445,9 +395,7 @@ const getLastSixMonths = (): IMonthActivity[] => {
       },
     );
 
-  /**
-   * Time-of-day chart.
-   */
+  // Time of day
   const totalCommits =
     morning +
     daytime +
@@ -479,13 +427,6 @@ const getLastSixMonths = (): IMonthActivity[] => {
     },
   ];
 
-  const commitWidth = Math.max(
-    ...oneDay.map(
-      (period) =>
-        period.commits.toString().length,
-    ),
-  );
-
   const timeBarUnits =
     allocateBarUnits(
       oneDay.map(
@@ -494,6 +435,8 @@ const getLastSixMonths = (): IMonthActivity[] => {
       15,
     );
 
+  // Raw commit counts are intentionally omitted here
+  // to keep the side-by-side layout compact.
   const timeLines = oneDay.map(
     (period, index) => {
       const percent =
@@ -502,11 +445,7 @@ const getLastSixMonths = (): IMonthActivity[] => {
         100;
 
       return [
-        `${period.commits
-          .toString()
-          .padStart(
-            commitWidth,
-          )} commits`,
+        period.range.padEnd(7),
         generateSparkleBar(
           timeBarUnits[index],
           15,
@@ -514,15 +453,12 @@ const getLastSixMonths = (): IMonthActivity[] => {
         `${percent
           .toFixed(1)
           .padStart(5)}%`,
-        period.range,
         `\u2066${period.label}\u2069`,
       ].join(' ');
     },
   );
 
-  /**
-   * Project activity.
-   */
+  // Projects
   const projectActivity: IProjectActivity[] =
     projects
       .map((project) => {
@@ -656,9 +592,7 @@ const getLastSixMonths = (): IMonthActivity[] => {
       },
     );
 
-  /**
-   * Activity for the last six calendar months.
-   */
+  // Last six months
   const monthlyActivity =
     getLastSixMonths();
 
@@ -752,9 +686,7 @@ const getLastSixMonths = (): IMonthActivity[] => {
       },
     );
 
-  /**
-   * Get profile README.
-   */
+  // Profile README
   const owner =
     'laiflonglearner';
 
@@ -823,10 +755,6 @@ const getLastSixMonths = (): IMonthActivity[] => {
     return;
   }
 
-  /**
-   * Get current rotating status so the same status
-   * is not selected twice in a row.
-   */
   const currentBlock =
     currentReadme.slice(
       startIndex,
@@ -851,10 +779,10 @@ const getLastSixMonths = (): IMonthActivity[] => {
     );
 
   /**
-   * Generate productive-box.
+   * 2×2 dashboard:
    *
-   * The heading is centered.
-   * Each statistic gets its own left-aligned code block.
+   * Languages     | Time of day
+   * Projects      | Last 6 months
    */
   const generatedBlock = [
     startMarker,
@@ -864,21 +792,32 @@ const getLastSixMonths = (): IMonthActivity[] => {
     '',
     '</div>',
     '',
-    '```text',
+    '<table>',
+    '<tr>',
+    '<td valign="top">',
+    '<pre>',
     ...languageLines,
-    '```',
-    '',
-    '```text',
+    '</pre>',
+    '</td>',
+    '<td valign="top">',
+    '<pre>',
     ...timeLines,
-    '```',
-    '',
-    '```text',
+    '</pre>',
+    '</td>',
+    '</tr>',
+    '<tr>',
+    '<td valign="top">',
+    '<pre>',
     ...projectLines,
-    '```',
-    '',
-    '```text',
+    '</pre>',
+    '</td>',
+    '<td valign="top">',
+    '<pre>',
     ...monthLines,
-    '```',
+    '</pre>',
+    '</td>',
+    '</tr>',
+    '</table>',
     endMarker,
   ].join('\n');
 
@@ -893,9 +832,6 @@ const getLastSixMonths = (): IMonthActivity[] => {
         endMarker.length,
     );
 
-  /**
-   * Update profile README.
-   */
   await octokit.repos
     .createOrUpdateFileContents({
       owner,
