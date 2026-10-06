@@ -17,16 +17,14 @@ interface IRepo {
   owner: string;
 }
 
-const getRandomFilename = (
+const getRandomStatus = (
   isDaytime: boolean,
-  currentFilename: string,
+  currentStatus: string,
 ): string => {
-  const filenames = isDaytime ? daytimeFilenames : nighttimeFilenames;
+  const statuses = isDaytime ? daytimeFilenames : nighttimeFilenames;
 
-  // Prevent the same filename from appearing twice in a row.
-  const available = filenames.filter(
-    (filename) => filename !== currentFilename,
-  );
+  // Prevent the same status from appearing twice in a row.
+  const available = statuses.filter((status) => status !== currentStatus);
 
   return available[Math.floor(Math.random() * available.length)];
 };
@@ -90,16 +88,16 @@ const getRandomFilename = (
   });
 
   /**
-   * Next, generate diagram.
+   * Generate diagram.
    */
   const sum = morning + daytime + evening + night;
   if (!sum) return;
 
   const oneDay = [
-    { label: '🥝 الصباح', commits: morning },
-    { label: '🍊 النهار', commits: daytime },
-    { label: '🍓 المساء', commits: evening },
-    { label: '🫐 الليل', commits: night },
+    { label: '🥝 الصباح', range: '4-12', commits: morning },
+    { label: '🍊 النهار', range: '12-17', commits: daytime },
+    { label: '🍓 المساء', range: '17-21', commits: evening },
+    { label: '🫐 الليل', range: '21-4', commits: night },
   ];
 
   const lines = oneDay.reduce((prev, cur) => {
@@ -107,6 +105,7 @@ const getRandomFilename = (
 
     const line = [
       `${cur.commits.toString().padStart(5)} commits`.padEnd(14),
+      cur.range.padEnd(5),
       generateBarChart(percent, 21),
       String(percent.toFixed(1)).padStart(5) + '%',
       `\u2066${cur.label}\u2069`,
@@ -116,44 +115,98 @@ const getRandomFilename = (
   }, [] as string[]);
 
   /**
-   * Finally, update the Gist.
+   * Get profile README.
    */
   const octokit = new Octokit({
     auth: `token ${process.env.GH_TOKEN}`,
   });
 
-  const gist = await octokit.gists
-    .get({
-      gist_id: `${process.env.GIST_ID}`,
+  const owner = 'laiflonglearner';
+  const repo = 'laiflonglearner';
+  const path = 'README.md';
+
+  const readme = await octokit.repos
+    .getContent({
+      owner,
+      repo,
+      path,
     })
-    .catch((error) => console.error(`Unable to get gist\n${error}`));
+    .catch((error) =>
+      console.error(`Unable to get profile README\n${error}`),
+    );
 
-  if (!gist) return;
+  if (!readme) return;
 
-  if (!gist.data.files) {
-    console.error('No file found in the gist');
+  if (Array.isArray(readme.data) || !('content' in readme.data)) {
+    console.error('README.md could not be read');
     return;
   }
 
-  const currentFilename = Object.keys(gist.data.files)[0];
+  const currentContent = Buffer.from(
+    readme.data.content,
+    'base64',
+  ).toString('utf8');
 
-  const nextFilename = getRandomFilename(
-    morning + daytime > evening + night,
-    currentFilename,
+  /**
+   * Get the current rotating status from the generated section,
+   * then choose a different one for this update.
+   */
+  const statusMatch = currentContent.match(
+    /<!-- gen:commits:status -->(.*?)<!-- gen:commits:status:end -->/s,
   );
 
-  await octokit.gists.update({
-    gist_id: `${process.env.GIST_ID}`,
-    files: {
-      [currentFilename]: {
-        filename: nextFilename,
-        content: lines.join('\n'),
-      },
-    },
+  const currentStatus = statusMatch?.[1]?.trim() ?? '';
+
+  const nextStatus = getRandomStatus(
+    morning + daytime > evening + night,
+    currentStatus,
+  );
+
+  /**
+   * Generate README section.
+   */
+  const startMarker = '<!-- gen:commits:start -->';
+  const endMarker = '<!-- gen:commits:end -->';
+
+  const generated = [
+    startMarker,
+    '<!-- gen:commits:status -->',
+    `### ${nextStatus}`,
+    '<!-- gen:commits:status:end -->',
+    '',
+    '```text',
+    ...lines,
+    '```',
+    endMarker,
+  ].join('\n');
+
+  const startIndex = currentContent.indexOf(startMarker);
+  const endIndex = currentContent.indexOf(endMarker);
+
+  if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
+    console.error('README.md is missing the commit stats markers');
+    return;
+  }
+
+  const nextContent =
+    currentContent.slice(0, startIndex) +
+    generated +
+    currentContent.slice(endIndex + endMarker.length);
+
+  /**
+   * Update profile README.
+   */
+  await octokit.repos.createOrUpdateFileContents({
+    owner,
+    repo,
+    path,
+    message: 'chore: update commit stats',
+    content: Buffer.from(nextContent).toString('base64'),
+    sha: readme.data.sha,
   });
 
-  console.log(`Successfully updated gist: ${nextFilename} 🎉`);
+  console.log(`Successfully updated profile README: ${nextStatus} 🎉`);
 })().catch((error) => {
-  console.error('Unable to update gist', error);
+  console.error('Unable to update profile README', error);
   process.exitCode = 1;
 });
