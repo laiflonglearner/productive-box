@@ -244,6 +244,7 @@ export const updateProductiveBox = async () => {
    */
   const repos: IRepo[] =
     repoInfos
+      .filter((repoInfo) => repoInfo?.name !== 'laiflonglearner-vault')
       .filter((repoInfo) => !repoInfo?.isFork || repoInfo?.name === 'productive-box')
       .map((repoInfo) => ({
         name: repoInfo?.name,
