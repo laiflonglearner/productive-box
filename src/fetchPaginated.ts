@@ -91,10 +91,14 @@ export const fetchAuthoredLines = async (
       repository: { object: Record<string, { ranges: BlameRange[] } | null> | null } | null;
     }>(createBlameQuery(owner, name, commit, paths));
   } catch (error) {
-    // GitHub refuses to blame files over 10MB and fails the whole batch; isolate and skip those files.
+    // blame refuses files over 10MB and fails the whole batch
     if (!/over 10mb/i.test(String(error))) throw error;
     if (paths.length === 1) return [0];
-    return (await Promise.all(paths.map((path) => fetchAuthoredLines(username, owner, name, commit, [path])))).flat();
+    const half = paths.length >> 1;
+    return [
+      ...(await fetchAuthoredLines(username, owner, name, commit, paths.slice(0, half))),
+      ...(await fetchAuthoredLines(username, owner, name, commit, paths.slice(half))),
+    ];
   }
   const object = response.data.repository?.object;
   return paths.map((path, index) => {

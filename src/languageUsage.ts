@@ -44,7 +44,7 @@ type FileMetadata = {
   object: { isBinary: boolean | null } | null;
 } | null;
 
-/** Fetch metadata for paths; a file GitHub cannot resolve (over 10MB) fails its batch, so isolate it as 'skip'. */
+/** A file over 10MB fails its whole batch, so bisect sequentially and mark it 'skip'. */
 async function fetchMetadata(owner: string, repo: string, oid: string, paths: string[]): Promise<(FileMetadata | 'skip')[]> {
   try {
     const metadata = await githubQuery<{ repository: { object: Record<string, FileMetadata> | null } | null }>(
@@ -54,11 +54,14 @@ async function fetchMetadata(owner: string, repo: string, oid: string, paths: st
   } catch (error) {
     if (!/over 10mb/i.test(String(error))) throw error;
     if (paths.length === 1) return ['skip'];
-    return (await Promise.all(paths.map((path) => fetchMetadata(owner, repo, oid, [path])))).flat();
+    const half = paths.length >> 1;
+    return [
+      ...(await fetchMetadata(owner, repo, oid, paths.slice(0, half))),
+      ...(await fetchMetadata(owner, repo, oid, paths.slice(half))),
+    ];
   }
 }
 
-/** Per repo, per path: the blob SHA that was scanned and what it contributed ('' language = not counted). */
 export type LanguageCache = Record<string, Record<string, { sha: string; language: string; lines: number }>>;
 
 /**
@@ -112,7 +115,6 @@ export async function fetchLanguageUsage(
       for (const [index, path] of paths.entries()) {
         const file = metadata[index];
         scanned[path] = { sha: shas.get(path) ?? '', language: '', lines: 0 };
-        // GitHub cannot resolve files over 10MB; they are not meaningful source code, so skip them.
         if (file === 'skip') continue;
         if (!file) throw new Error(`File metadata unavailable for ${repo.full_name}/${path}`);
         const detectedLanguage = file.language?.name;
