@@ -201,21 +201,30 @@ const generateSparkleBar = (
   '✦'.repeat(filled) +
   '✧'.repeat(length - filled);
 
-const escapeHtml = (value: string): string =>
-  value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const combineColumns = (
+  leftLines: string[],
+  rightLines: string[],
+  gap = 8,
+): string[] => {
+  const leftWidth = Math.max(0, ...leftLines.map((line) => line.length));
+  const rowCount = Math.max(leftLines.length, rightLines.length);
 
-const renderSectionTable = (
+  return Array.from({ length: rowCount }, (_, index) => {
+    const left = leftLines[index] ?? '';
+    const right = rightLines[index] ?? '';
+    return `${left.padEnd(leftWidth)}${' '.repeat(gap)}${right}`;
+  });
+};
+
+const renderTextSection = (
   left: { title: string; lines: string[] },
   right: { title: string; lines: string[] },
 ): string[] => [
-  '<table>',
-  '  <thead>',
-  `    <tr><th align="left">${escapeHtml(left.title)}</th><th align="left">${escapeHtml(right.title)}</th></tr>`,
-  '  </thead>',
-  '  <tbody>',
-  `    <tr><td><pre>${escapeHtml(left.lines.join('\n'))}</pre></td><td><pre>${escapeHtml(right.lines.join('\n'))}</pre></td></tr>`,
-  '  </tbody>',
-  '</table>',
+  `**${left.title}**${'\u00a0'.repeat(Math.max(2, Math.max(...left.lines.map((line) => line.length)) + 8 - left.title.length))}**${right.title}**`,
+  '',
+  '```text',
+  ...combineColumns(left.lines, right.lines),
+  '```',
 ];
 
 const getLastFiveMonths = (): IMonthActivity[] => {
@@ -707,12 +716,12 @@ export const updateProductiveBox = async () => {
       },
     );
 
-  const topSections = renderSectionTable(
+  const topSections = renderTextSection(
     { title: '𖧷──〢language stack', lines: languageLines },
     { title: '𖧷──〢peak hours this year', lines: timeLines },
   );
 
-  const bottomSections = renderSectionTable(
+  const bottomSections = renderTextSection(
     { title: '𖧷──〢stuff i’ve been building', lines: projectLines },
     { title: '𖧷──〢how it’s been going', lines: monthLines },
   );
