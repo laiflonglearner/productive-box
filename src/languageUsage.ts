@@ -1,0 +1,104 @@
+import type { Octokit } from '@octokit/rest';
+import { fetchAuthoredLines } from './fetchPaginated.js';
+import githubQuery from './githubQuery.js';
+import { languageGroups } from './languageGroups.js';
+import { createFileMetadataQuery } from './queries.js';
+
+const METADATA_BATCH_SIZE = 50;
+const BLAME_BATCH_SIZE = 10;
+
+/** Get every current path, falling back to subtree traversal if GitHub truncates the recursive tree. */
+export async function fetchCurrentFiles(octokit: Octokit, owner: string, repo: string, treeSha: string) {
+  const recursive = await octokit.git.getTree({ owner, repo, tree_sha: treeSha, recursive: '1' });
+  const isFile = <T extends { type?: string; mode?: string; path?: string }>(item: T): item is T & { path: string } =>
+    item.type === 'blob' && item.mode !== '120000' && typeof item.path === 'string';
+  if (!recursive.data.truncated) return recursive.data.tree.filter(isFile).map((item) => item.path);
+
+  const files: string[] = [];
+  const pending = [{ sha: treeSha, prefix: '' }];
+  while (pending.length) {
+    const next = pending.pop();
+    if (!next) break;
+    const tree = await octokit.git.getTree({ owner, repo, tree_sha: next.sha });
+    if (tree.data.truncated) throw new Error(`Non-recursive tree truncated for ${owner}/${repo}/${next.prefix}`);
+    for (const item of tree.data.tree) {
+      if (!item.path) throw new Error(`Missing tree path for ${owner}/${repo}`);
+      const path = `${next.prefix}${item.path}`;
+      if (isFile(item)) files.push(path);
+      if (item.type === 'tree') {
+        if (!item.sha) throw new Error(`Missing subtree SHA for ${owner}/${repo}/${path}`);
+        pending.push({ sha: item.sha, prefix: `${path}/` });
+      }
+    }
+  }
+  return files;
+}
+
+/** Aggregate present-day, account-attributed lines with no commit-date cutoff. */
+export async function fetchLanguageUsage(octokit: Octokit, username: string): Promise<Map<string, number>> {
+  const repos = await octokit.paginate(octokit.repos.listForAuthenticatedUser, {
+    affiliation: 'owner',
+    visibility: 'all',
+    per_page: 100,
+  });
+  const totals = new Map<string, number>();
+  for (const repo of repos) {
+    if (repo.fork || repo.owner.login.toLowerCase() !== username.toLowerCase()) continue;
+    const snapshot = await githubQuery<{
+      repository: { defaultBranchRef: { target: { oid: string; tree?: { oid: string } } } | null } | null;
+    }>(`query {
+      repository(owner: ${JSON.stringify(repo.owner.login)}, name: ${JSON.stringify(repo.name)}) {
+        defaultBranchRef { target { ... on Commit { oid tree { oid } } } }
+      }
+    }`);
+    const repository = snapshot.data.repository;
+    if (!repository) throw new Error(`Repository ${repo.full_name} is unavailable`);
+    // Empty repositories and repositories without a default branch have no current code to count.
+    if (!repository.defaultBranchRef) continue;
+    const commit = repository.defaultBranchRef.target;
+    if (!commit.tree) throw new Error(`Default branch of ${repo.full_name} is not a commit`);
+    const files = await fetchCurrentFiles(octokit, repo.owner.login, repo.name, commit.tree.oid);
+    // Keep GitHub's existing code-language scope, excluding prose/data languages from the dashboard.
+    const languages = await octokit.repos.listLanguages({ owner: repo.owner.login, repo: repo.name });
+    const codeLanguages = new Set(Object.keys(languages.data));
+    const sourceFiles: { path: string; language: string }[] = [];
+    for (let offset = 0; offset < files.length; offset += METADATA_BATCH_SIZE) {
+      const paths = files.slice(offset, offset + METADATA_BATCH_SIZE);
+      const metadata = await githubQuery<{
+        repository: {
+          object: Record<
+            string,
+            {
+              language: { name: string } | null;
+              isGenerated: boolean;
+              object: { isBinary: boolean | null } | null;
+            } | null
+          > | null;
+        } | null;
+      }>(createFileMetadataQuery(repo.owner.login, repo.name, commit.oid, paths));
+      for (const [index, path] of paths.entries()) {
+        const file = metadata.data.repository?.object?.[`file${index}`];
+        if (!file) throw new Error(`File metadata unavailable for ${repo.full_name}/${path}`);
+        const detectedLanguage = file.language?.name;
+        const language = detectedLanguage && (languageGroups.get(detectedLanguage) ?? detectedLanguage);
+        if (!language || !codeLanguages.has(language) || file.isGenerated) continue;
+        if (file.object?.isBinary == null) throw new Error(`File encoding unavailable for ${repo.full_name}/${path}`);
+        if (!file.object.isBinary) sourceFiles.push({ path, language });
+      }
+    }
+    for (let offset = 0; offset < sourceFiles.length; offset += BLAME_BATCH_SIZE) {
+      const batch = sourceFiles.slice(offset, offset + BLAME_BATCH_SIZE);
+      const lines = await fetchAuthoredLines(
+        username,
+        repo.owner.login,
+        repo.name,
+        commit.oid,
+        batch.map((file) => file.path),
+      );
+      for (const [index, file] of batch.entries()) {
+        if (lines[index] > 0) totals.set(file.language, (totals.get(file.language) ?? 0) + lines[index]);
+      }
+    }
+  }
+  return totals;
+}

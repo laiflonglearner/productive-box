@@ -8,6 +8,7 @@
   "scripts": {
     "preinstall": "./preinstall.sh",
     "dev": "node --loader ts-node/esm src/index.ts",
+    "test": "node --loader ts-node/esm --test tests/stats.test.mjs",
     "build": "tsc && ncc build dist/index.js --minify && find dist/ -type f -not -name 'index.js' -delete",
     "lint": "biome lint"
   },

@@ -1,3 +1,4 @@
+import { pathToFileURL } from 'node:url';
 import { Octokit } from '@octokit/rest';
 import { config } from 'dotenv';
 
@@ -11,6 +12,7 @@ import {
 } from './filenames.js';
 import generateBarChart from './generateBarChart.js';
 import githubQuery from './githubQuery.js';
+import { fetchLanguageUsage } from './languageUsage.js';
 import { userInfoQuery } from './queries.js';
 
 config({ path: ['.env'] });
@@ -22,7 +24,7 @@ interface IRepo {
 
 interface ILanguage {
   name: string;
-  bytes: number;
+  lines: number;
 }
 
 interface ICommitDate {
@@ -71,6 +73,12 @@ const projects: IProject[] = [
     repos: ['sleeby'],
   },
 ];
+
+export const getActivitySince = (now = new Date()): string => {
+  const since = new Date(now);
+  since.setUTCDate(since.getUTCDate() - 365);
+  return since.toISOString();
+};
 
 const getRandomStatus = (
   isDaytime: boolean,
@@ -220,35 +228,18 @@ const getLastFiveMonths = (): IMonthActivity[] => {
   );
 };
 
-(async () => {
+export const updateProductiveBox = async () => {
   const octokit = new Octokit({
     auth: `token ${process.env.GH_TOKEN}`,
   });
 
-  const userResponse =
-    await githubQuery(
-      userInfoQuery,
-    ).catch((error) =>
-      console.error(
-        `Unable to get username and id\n${error}`,
-      ),
-    );
+  const userResponse = await githubQuery<{ viewer: { login: string; id: string } }>(userInfoQuery);
+  const { login: username, id } = userResponse.data.viewer;
+  if (!username || !id) throw new Error('GitHub viewer is unavailable');
 
-  const { login: username, id } =
-    userResponse?.data?.viewer ?? {};
-
-  if (!username || !id) return;
-
-  const repoInfos =
-    await fetchContributedRepos(
-      username,
-    ).catch((error) =>
-      console.error(
-        `Unable to get the contributed repos\n${error}`,
-      ),
-    );
-
-  if (!repoInfos) return;
+  // Activity and projects cover 365 days; language usage has no date cutoff.
+  const activitySince = getActivitySince();
+  const repoInfos = await fetchContributedRepos(username);
 
   /**
    * Include normal repositories and productive-box.
@@ -268,61 +259,13 @@ const getLastFiveMonths = (): IMonthActivity[] => {
           repoInfo?.owner?.login,
       }));
 
-  let repoActivity: IRepoActivity[];
-  let languagesByRepo: Record<
-    string,
-    number
-  >[];
-
-  try {
-    [
-      repoActivity,
-      languagesByRepo,
-    ] = await Promise.all([
-      Promise.all(
-        repos.map(
-          async (repo) => ({
-            repo,
-            committedDates:
-              await fetchCommittedDates(
-                id,
-                repo.name,
-                repo.owner,
-              ),
-          }),
-        ),
-      ),
-
-      Promise.all(
-        repos.map(
-          ({ name, owner }) =>
-            octokit.repos
-              .listLanguages({
-                owner,
-                repo: name,
-              })
-              .then(
-                (response) =>
-                  response.data,
-              )
-              .catch(
-                (error) => {
-                  console.error(
-                    `Unable to get languages for ${owner}/${name}\n${error}`,
-                  );
-
-                  return {};
-                },
-              ),
-        ),
-      ),
-    ]);
-  } catch (error) {
-    console.error(
-      `Unable to get GitHub activity\n${error}`,
-    );
-
-    return;
+  // Keep requests sequential to avoid GitHub's shared secondary concurrency limit.
+  const repoActivity: IRepoActivity[] = [];
+  for (const repo of repos) {
+    repoActivity.push({
+      repo,
+      committedDates: await fetchCommittedDates(id, repo.name, repo.owner, activitySince),
+    });
   }
 
   const allCommittedDates =
@@ -387,50 +330,17 @@ const getLastFiveMonths = (): IMonthActivity[] => {
   /**
    * Languages.
    */
-  const languageTotals =
-    new Map<string, number>();
+  const languageTotals = await fetchLanguageUsage(octokit, username);
 
-  languagesByRepo.forEach(
-    (languages) => {
-      Object.entries(
-        languages,
-      ).forEach(
-        ([language, bytes]) => {
-          languageTotals.set(
-            language,
-            (languageTotals.get(
-              language,
-            ) ?? 0) + bytes,
-          );
-        },
-      );
-    },
-  );
+  const totalLanguageLines = Array.from(languageTotals.values()).reduce((sum, lines) => sum + lines, 0);
 
-  const totalLanguageBytes =
-    Array.from(
-      languageTotals.values(),
-    ).reduce(
-      (sum, bytes) =>
-        sum + bytes,
-      0,
-    );
-
-  const topLanguages: ILanguage[] =
-    Array.from(
-      languageTotals.entries(),
-    )
-      .map(
-        ([name, bytes]) => ({
-          name,
-          bytes,
-        }),
-      )
-      .sort(
-        (a, b) =>
-          b.bytes - a.bytes,
-      )
-      .slice(0, 4);
+  const topLanguages: ILanguage[] = Array.from(languageTotals.entries())
+    .map(([name, lines]) => ({
+      name,
+      lines,
+    }))
+    .sort((a, b) => b.lines - a.lines)
+    .slice(0, 4);
 
   const languageWidth =
     Math.max(
@@ -444,41 +354,20 @@ const getLastFiveMonths = (): IMonthActivity[] => {
   /**
    * Languages use 20 sparkles.
    */
-  const languageBarUnits =
-    allocateBarUnits(
-      topLanguages.map(
-        (language) =>
-          language.bytes,
-      ),
-      20,
-    );
+  const languageBarUnits = allocateBarUnits(
+    topLanguages.map((language) => language.lines),
+    20,
+  );
 
-  const languageLines =
-    topLanguages.map(
-      (language, index) => {
-        const percent =
-          totalLanguageBytes
-            ? (language.bytes /
-                totalLanguageBytes) *
-              100
-            : 0;
+  const languageLines = topLanguages.map((language, index) => {
+    const percent = totalLanguageLines ? (language.lines / totalLanguageLines) * 100 : 0;
 
-        return [
-          language.name.padEnd(
-            languageWidth,
-          ),
-          generateSparkleBar(
-            languageBarUnits[
-              index
-            ],
-            20,
-          ),
-          `${percent
-            .toFixed(1)
-            .padStart(5)}%`,
-        ].join(' ');
-      },
-    );
+    return [
+      language.name.padEnd(languageWidth),
+      generateSparkleBar(languageBarUnits[index], 20),
+      `${percent.toFixed(1).padStart(5)}%`,
+    ].join(' ');
+  });
 
   /**
    * Time of day.
@@ -489,7 +378,7 @@ const getLastFiveMonths = (): IMonthActivity[] => {
     evening +
     night;
 
-  if (!totalCommits) return;
+  if (!languageLines.length) languageLines.push('No attributed code found.');
 
   const oneDay = [
     {
@@ -533,34 +422,16 @@ const getLastFiveMonths = (): IMonthActivity[] => {
       ),
     );
 
-  const timeLines =
-  oneDay.map(
-    (period, index) => {
-      const percent =
-        (period.commits /
-          totalCommits) *
-        100;
+  const timeLines = oneDay.map((period, index) => {
+    const percent = totalCommits ? (period.commits / totalCommits) * 100 : 0;
 
-      return [
-        `${period.commits
-          .toString()
-          .padStart(
-            timeCommitWidth,
-          )} commits`,
-        `${percent
-          .toFixed(1)
-          .padStart(5)}%`,
-        generateSparkleBar(
-          timeBarUnits[index],
-          15,
-        ),
-        `\u2066${period.label.split(' ')[0]} ${period.range} ${period.label
-          .split(' ')
-          .slice(1)
-          .join(' ')}\u2069`,
-      ].join(' ');
-    },
-  );
+    return [
+      `${period.commits.toString().padStart(timeCommitWidth)} commits`,
+      `${percent.toFixed(1).padStart(5)}%`,
+      generateSparkleBar(timeBarUnits[index], 15),
+      `\u2066${period.label.split(' ')[0]} ${period.range} ${period.label.split(' ').slice(1).join(' ')}\u2069`,
+    ].join(' ');
+  });
 
   /**
    * Projects.
@@ -809,17 +680,12 @@ const getLastFiveMonths = (): IMonthActivity[] => {
    * Bottom:
    * Projects | Last five months
    */
-  const topLines =
-    combineColumns(
-      languageLines,
-      timeLines,
-    );
+  const topLines = combineColumns(['language stack', ...languageLines], ["when i'm most active", ...timeLines]);
 
-  const bottomLines =
-    combineColumns(
-      projectLines,
-      monthLines,
-    );
+  const bottomLines = combineColumns(
+    ["stuff i've been building", ...projectLines],
+    ["how it's been doing", ...monthLines],
+  );
 
   /**
    * Profile README.
@@ -881,10 +747,7 @@ const getLastFiveMonths = (): IMonthActivity[] => {
       endMarker,
     );
 
-  if (
-    startIndex === -1 ||
-    endIndex === -1
-  ) {
+  if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
     console.error(
       'Productive box markers not found in README',
     );
@@ -909,11 +772,9 @@ const getLastFiveMonths = (): IMonthActivity[] => {
     '';
 
   const nextStatus =
-    getRandomStatus(
-      morning + daytime >
-        evening + night,
-      currentStatus,
-    );
+    !totalCommits && currentStatus
+      ? currentStatus
+      : getRandomStatus(morning + daytime > evening + night, currentStatus);
 
   /**
    * Generate dashboard.
@@ -968,11 +829,12 @@ const getLastFiveMonths = (): IMonthActivity[] => {
   console.log(
     `Successfully updated productive box: ${nextStatus} 🎉`,
   );
-})().catch((error) => {
-  console.error(
-    'Unable to update productive box',
-    error,
-  );
+};
 
-  process.exitCode = 1;
-});
+if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
+  updateProductiveBox().catch((error) => {
+    console.error('Unable to update productive box', error);
+
+    process.exitCode = 1;
+  });
+}
