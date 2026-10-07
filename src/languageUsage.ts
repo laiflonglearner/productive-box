@@ -138,6 +138,7 @@ export async function fetchLanguageUsage(
       }
     }
     cache[repo.full_name] = scanned;
+    console.log(`${repo.full_name}: ${allFiles.length - files.length} cached, ${files.length} scanned`);
     for (const { language, lines } of Object.values(scanned)) {
       if (language && lines > 0) totals.set(language, (totals.get(language) ?? 0) + lines);
     }
