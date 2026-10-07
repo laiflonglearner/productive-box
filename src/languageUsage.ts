@@ -80,7 +80,7 @@ export async function fetchLanguageUsage(
   });
   const totals = new Map<string, number>();
   for (const repo of repos) {
-    if (repo.fork || repo.owner.login.toLowerCase() !== username.toLowerCase()) continue;
+    if ((repo.fork && repo.name !== 'productive-box') || repo.owner.login.toLowerCase() !== username.toLowerCase()) continue;
     const snapshot = await githubQuery<{
       repository: { defaultBranchRef: { target: { oid: string; tree?: { oid: string } } } | null } | null;
     }>(`query {

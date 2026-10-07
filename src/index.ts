@@ -244,17 +244,13 @@ export const updateProductiveBox = async () => {
    */
   const repos: IRepo[] =
     repoInfos
-      .filter(
-        (repoInfo) =>
-          !repoInfo?.isFork ||
-          repoInfo?.name ===
-            'productive-box',
-      )
+      .filter((repoInfo) => !repoInfo?.isFork || repoInfo?.name === 'productive-box')
       .map((repoInfo) => ({
         name: repoInfo?.name,
-        owner:
-          repoInfo?.owner?.login,
+        owner: repoInfo?.owner?.login,
       }));
+  // GitHub does not list commits to a fork as contributions, so add productive-box directly.
+  if (!repos.some((repo) => repo.name === 'productive-box')) repos.push({ name: 'productive-box', owner: username });
 
   // Keep requests sequential to avoid GitHub's shared secondary concurrency limit.
   const repoActivity: IRepoActivity[] = [];
@@ -665,12 +661,12 @@ export const updateProductiveBox = async () => {
   const shiftHeader = (header: string, spaces: number) => `${' '.repeat(spaces)}꩜ ${header}`;
   const topLines = combineColumns(
     ['꩜ language stack', ...languageLines],
-    [shiftHeader("when i’m most active", 4), ...timeLines],
+    [shiftHeader("when i’m most active", 6), ...timeLines],
   );
 
   const bottomLines = combineColumns(
     ["꩜ stuff i’ve been building", ...projectLines],
-    [shiftHeader("how it’s been doing", 3), ...monthLines],
+    [shiftHeader("how it’s been going", 5), ...monthLines],
   );
 
   const owner =

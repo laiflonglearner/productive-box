@@ -256,7 +256,7 @@ function mockDashboard({ commits = [], failBlame = false, emptyLanguages = false
       } else if (query.includes('history(')) {
         assert.match(query, /since: "\d{4}-\d\d-\d\dT/);
         data = { repository: { defaultBranchRef: { target: { history: {
-          nodes: commits.map(committedDate => ({ committedDate })),
+          nodes: query.includes('name: "sleeby"') ? commits.map(committedDate => ({ committedDate })) : [],
           pageInfo: { hasNextPage: false, endCursor: null },
         } } } } };
       } else if (query.includes('defaultBranchRef')) data = { repository: { defaultBranchRef: {
