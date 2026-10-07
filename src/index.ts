@@ -356,7 +356,7 @@ export const updateProductiveBox = async () => {
 
   const languageBarUnits = allocateBarUnits(
     topLanguages.map((language) => language.lines),
-    20,
+    18,
   );
 
   const languageLines = topLanguages.map((language, index) => {
@@ -364,7 +364,7 @@ export const updateProductiveBox = async () => {
 
     return [
       language.name.padEnd(languageWidth),
-      generateSparkleBar(languageBarUnits[index], 20),
+      generateSparkleBar(languageBarUnits[index], 18),
       `${percent.toFixed(1).padStart(5)}%`,
     ].join(' ');
   });
