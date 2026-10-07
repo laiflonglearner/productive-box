@@ -218,7 +218,7 @@ const getLastFiveMonths = (): IMonthActivity[] => {
 
       return {
         key: `${year}-${month}`,
-        label: `${month} ’${year}`,
+        label: `${month} ‘${year}`,
         commits: 0,
       };
     },
