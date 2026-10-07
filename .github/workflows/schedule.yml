@@ -7,6 +7,10 @@ on:
     - cron: "0 */6 * * *"
   workflow_dispatch:
 
+concurrency:
+  group: update-productive-box
+  cancel-in-progress: true
+
 jobs:
   update-productive-box:
     runs-on: ubuntu-latest
