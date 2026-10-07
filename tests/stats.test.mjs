@@ -365,3 +365,13 @@ test('unchanged files are reused from the cache and not re-queried', async () =>
   assert.deepEqual(Object.fromEntries(await fetchLanguageUsage(octokit, 'owner', cache)), { TypeScript: 5 });
   assert.equal(queries - first, 1); // only the head-commit lookup
 });
+
+test('frozen repos are served from the cache with no API calls', async () => {
+  const octokit = {
+    paginate: async () => [{ name: 'old', owner: { login: 'owner' }, full_name: 'owner/old', fork: false }],
+  };
+  globalThis.fetch = async () => { throw new Error('unexpected request'); };
+  const cache = { 'owner/old': { 'a.ts': { sha: 'x', language: 'TypeScript', lines: 7 } } };
+  const totals = await fetchLanguageUsage(octokit, 'owner', cache, new Set(['old']), new Set(['old']));
+  assert.deepEqual(Object.fromEntries(totals), { TypeScript: 7 });
+});

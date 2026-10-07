@@ -64,6 +64,12 @@ async function fetchMetadata(owner: string, repo: string, oid: string, paths: st
 
 export type LanguageCache = Record<string, Record<string, { sha: string; language: string; lines: number }>>;
 
+function addTotals(totals: Map<string, number>, files: LanguageCache[string]) {
+  for (const { language, lines } of Object.values(files)) {
+    if (language && lines > 0) totals.set(language, (totals.get(language) ?? 0) + lines);
+  }
+}
+
 /**
  * Aggregate present-day, account-attributed lines with no commit-date cutoff.
  * Files whose blob SHA is unchanged since the cached scan are reused, so only changed files are re-blamed.
@@ -73,6 +79,7 @@ export async function fetchLanguageUsage(
   username: string,
   cache: LanguageCache = {},
   include?: ReadonlySet<string>,
+  frozen: ReadonlySet<string> = new Set(),
 ): Promise<Map<string, number>> {
   const repos = await octokit.paginate(octokit.repos.listForAuthenticatedUser, {
     affiliation: 'owner',
@@ -82,6 +89,12 @@ export async function fetchLanguageUsage(
   const totals = new Map<string, number>();
   for (const repo of repos) {
     if ((include && !include.has(repo.name)) || (repo.fork && repo.name !== 'productive-box') || repo.owner.login.toLowerCase() !== username.toLowerCase()) continue;
+    const cached = cache[repo.full_name];
+    // Frozen repos are no longer worked on: once scanned, reuse the cache with no API calls.
+    if (cached && frozen.has(repo.name)) {
+      addTotals(totals, cached);
+      continue;
+    }
     const snapshot = await githubQuery<{
       repository: { defaultBranchRef: { target: { oid: string; tree?: { oid: string } } } | null } | null;
     }>(`query {
@@ -142,9 +155,7 @@ export async function fetchLanguageUsage(
     }
     cache[repo.full_name] = scanned;
     console.log(`${repo.full_name}: ${allFiles.length - files.length} cached, ${files.length} scanned`);
-    for (const { language, lines } of Object.values(scanned)) {
-      if (language && lines > 0) totals.set(language, (totals.get(language) ?? 0) + lines);
-    }
+    addTotals(totals, scanned);
   }
   return totals;
 }

@@ -74,17 +74,24 @@ const projects: IProject[] = [
   },
 ];
 
-const languageRepos = new Set([
+const activeLanguageRepos = [
   'lifelong-habit',
+  'laiflonglearner.com',
+  'productive-box',
+  'sleeby',
+  'lifelong-habit-discord-presence',
+];
+
+// No longer worked on: scanned once, then served from the cache.
+const frozenLanguageRepos = [
   'lifelong-habit-app',
   'thesis-research',
   'kaggle-notebooks',
-  'laiflonglearner.com',
   'datacamp-project-solutions',
-  'sleeby',
   'lifelong-habit-journey',
-  'productive-box',
-]);
+];
+
+const languageRepos = new Set([...activeLanguageRepos, ...frozenLanguageRepos]);
 
 export const getActivitySince = (now = new Date()): string => {
   const since = new Date(now);
@@ -342,7 +349,7 @@ export const updateProductiveBox = async () => {
     }
   }
   const cacheBefore = JSON.stringify(languageCache);
-  const languageTotals = await fetchLanguageUsage(octokit, username, languageCache, languageRepos);
+  const languageTotals = await fetchLanguageUsage(octokit, username, languageCache, languageRepos, new Set(frozenLanguageRepos));
 
   const totalLanguageLines = Array.from(languageTotals.values()).reduce((sum, lines) => sum + lines, 0);
 
