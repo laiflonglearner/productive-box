@@ -711,14 +711,14 @@ export const updateProductiveBox = async () => {
       },
     );
 
-  const shiftHeader = (header: string, spaces: number) => `${' '.repeat(spaces)}──𖧷 ${header}`;
+  const shiftHeader = (header: string, spaces: number) => `${' '.repeat(spaces)}𖧷──〢${header}`;
   const topLines = combineColumns(
-    ['──𖧷 language stack', ...languageLines],
+    ['𖧷──〢language stack', ...languageLines],
     [shiftHeader("peak hours this year", 9), ...timeLines],
   );
 
   const bottomLines = combineColumns(
-    ["──𖧷 stuff i’ve been building", ...projectLines],
+    ["𖧷──〢stuff i’ve been building", ...projectLines],
     [shiftHeader("how it’s been going", 8), ...monthLines],
   );
 
