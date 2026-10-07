@@ -34,6 +34,26 @@ export async function fetchCurrentFiles(octokit: Octokit, owner: string, repo: s
   return files;
 }
 
+type FileMetadata = {
+  language: { name: string } | null;
+  isGenerated: boolean;
+  object: { isBinary: boolean | null } | null;
+} | null;
+
+/** Fetch metadata for paths; a file GitHub cannot resolve (over 10MB) fails its batch, so isolate it as 'skip'. */
+async function fetchMetadata(owner: string, repo: string, oid: string, paths: string[]): Promise<(FileMetadata | 'skip')[]> {
+  try {
+    const metadata = await githubQuery<{ repository: { object: Record<string, FileMetadata> | null } | null }>(
+      createFileMetadataQuery(owner, repo, oid, paths),
+    );
+    return paths.map((_, index) => metadata.data.repository?.object?.[`file${index}`] ?? null);
+  } catch (error) {
+    if (!/over 10mb/i.test(String(error))) throw error;
+    if (paths.length === 1) return ['skip'];
+    return (await Promise.all(paths.map((path) => fetchMetadata(owner, repo, oid, [path])))).flat();
+  }
+}
+
 /** Aggregate present-day, account-attributed lines with no commit-date cutoff. */
 export async function fetchLanguageUsage(octokit: Octokit, username: string): Promise<Map<string, number>> {
   const repos = await octokit.paginate(octokit.repos.listForAuthenticatedUser, {
@@ -64,20 +84,11 @@ export async function fetchLanguageUsage(octokit: Octokit, username: string): Pr
     const sourceFiles: { path: string; language: string }[] = [];
     for (let offset = 0; offset < files.length; offset += METADATA_BATCH_SIZE) {
       const paths = files.slice(offset, offset + METADATA_BATCH_SIZE);
-      const metadata = await githubQuery<{
-        repository: {
-          object: Record<
-            string,
-            {
-              language: { name: string } | null;
-              isGenerated: boolean;
-              object: { isBinary: boolean | null } | null;
-            } | null
-          > | null;
-        } | null;
-      }>(createFileMetadataQuery(repo.owner.login, repo.name, commit.oid, paths));
+      const metadata = await fetchMetadata(repo.owner.login, repo.name, commit.oid, paths);
       for (const [index, path] of paths.entries()) {
-        const file = metadata.data.repository?.object?.[`file${index}`];
+        const file = metadata[index];
+        // GitHub cannot resolve files over 10MB; they are not meaningful source code, so skip them.
+        if (file === 'skip') continue;
         if (!file) throw new Error(`File metadata unavailable for ${repo.full_name}/${path}`);
         const detectedLanguage = file.language?.name;
         const language = detectedLanguage && (languageGroups.get(detectedLanguage) ?? detectedLanguage);

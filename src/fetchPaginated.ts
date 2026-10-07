@@ -85,9 +85,17 @@ export const fetchAuthoredLines = async (
   commit: string,
   paths: string[],
 ): Promise<number[]> => {
-  const response = await githubQuery<{
-    repository: { object: Record<string, { ranges: BlameRange[] } | null> | null } | null;
-  }>(createBlameQuery(owner, name, commit, paths));
+  let response;
+  try {
+    response = await githubQuery<{
+      repository: { object: Record<string, { ranges: BlameRange[] } | null> | null } | null;
+    }>(createBlameQuery(owner, name, commit, paths));
+  } catch (error) {
+    // GitHub refuses to blame files over 10MB and fails the whole batch; isolate and skip those files.
+    if (!/over 10mb/i.test(String(error))) throw error;
+    if (paths.length === 1) return [0];
+    return (await Promise.all(paths.map((path) => fetchAuthoredLines(username, owner, name, commit, [path])))).flat();
+  }
   const object = response.data.repository?.object;
   return paths.map((path, index) => {
     const ranges = object?.[`file${index}`]?.ranges;
