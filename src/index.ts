@@ -723,7 +723,7 @@ export const updateProductiveBox = async () => {
 
   const bottomLines = combineColumns(
     [`𖧷──〢${toBoldUnicode('stuff i’ve been building')}`, ...projectLines],
-    [shiftHeader('how it’s been going', 21), ...monthLines],
+    [shiftHeader('how it’s been going', 29), ...monthLines],
   );
 
   const owner =
