@@ -1,4 +1,3 @@
-```ts
 export const daytimeFilenames = [
   '🐿️ shipping from the treetops in the morning light',
   '🐿️ happily tinkering in the waking woods',
@@ -52,4 +51,3 @@ export const nighttimeFilenames = [
   '🦔 quietly building beneath the midnight sky',
   '🦔 contentedly coding among the moss by moonlight',
 ];
-```
