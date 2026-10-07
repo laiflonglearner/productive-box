@@ -1,3 +1,4 @@
+```ts
 export const daytimeFilenames = [
   '🐿️ shipping from the treetops in the morning light',
   '🐿️ happily tinkering in the waking woods',
@@ -31,12 +32,12 @@ export const nighttimeFilenames = [
   '🦔 getting things done in the moonlit grove',
   '🦔 stacking commits like mushrooms beneath the stars',
   '🦔 steadily debugging among the moonlit moss',
-  '🦔 quietly deploying before the moon sets',
+  '🦔 quietly deploying beneath the evening moon',
   '🦔 pushing commits deep into the quiet night',
   '🦔 cozily crafting in the brambles after dark',
   '🦔 cooking up something new beneath the moon',
   '🦔 patiently building while the woods sleep',
-  '🦔 working through the backlog in the evening quiet',
+  '🦔 working through the backlog in the evening calm',
   '🦔 playfully hacking among the mushrooms after dark',
   '🦔 quietly refactoring in the cool moonlit moss',
   '🦔 building something new well past midnight',
@@ -44,10 +45,11 @@ export const nighttimeFilenames = [
   '🦔 patching bugs in the middle of the night',
   '🦔 coding beneath the stars after dark',
   '🦔 steadily building in the soft glow of moonlight',
-  '🦔 scripting away in the evening brambles',
+  '🦔 scripting away among the evening brambles',
   '🦔 cozily compiling beneath a quiet moon',
   '🦔 shipping while the rest of the woods sleeps',
   '🦔 committing code in the grove beneath the stars',
   '🦔 quietly building beneath the midnight sky',
   '🦔 contentedly coding among the moss by moonlight',
 ];
+```
