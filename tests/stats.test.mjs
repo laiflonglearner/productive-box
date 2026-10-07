@@ -369,6 +369,7 @@ test('unchanged files are reused from the cache and not re-queried', async () =>
 test('frozen repos are served from the cache with no API calls', async () => {
   const octokit = {
     paginate: async () => [{ name: 'old', owner: { login: 'owner' }, full_name: 'owner/old', fork: false }],
+    repos: { listForAuthenticatedUser() {} },
   };
   globalThis.fetch = async () => { throw new Error('unexpected request'); };
   const cache = { 'owner/old': { 'a.ts': { sha: 'x', language: 'TypeScript', lines: 7 } } };
