@@ -201,31 +201,22 @@ const generateSparkleBar = (
   '✦'.repeat(filled) +
   '✧'.repeat(length - filled);
 
-const combineColumns = (
-  leftLines: string[],
-  rightLines: string[],
-  gap = 8,
-): string[] => {
-  const leftWidth = Math.max(
-    0,
-    ...leftLines.map((line) => line.length),
-  );
+const escapeHtml = (value: string): string =>
+  value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-  const rowCount = Math.max(
-    leftLines.length,
-    rightLines.length,
-  );
-
-  return Array.from(
-    { length: rowCount },
-    (_, index) => {
-      const left = leftLines[index] ?? '';
-      const right = rightLines[index] ?? '';
-
-      return `${left.padEnd(leftWidth)}${' '.repeat(gap)}${right}`;
-    },
-  );
-};
+const renderSectionTable = (
+  left: { title: string; lines: string[] },
+  right: { title: string; lines: string[] },
+): string[] => [
+  '<table>',
+  '  <thead>',
+  `    <tr><th align="left">${escapeHtml(left.title)}</th><th align="left">${escapeHtml(right.title)}</th></tr>`,
+  '  </thead>',
+  '  <tbody>',
+  `    <tr><td><pre>${escapeHtml(left.lines.join('\n'))}</pre></td><td><pre>${escapeHtml(right.lines.join('\n'))}</pre></td></tr>`,
+  '  </tbody>',
+  '</table>',
+];
 
 const getLastFiveMonths = (): IMonthActivity[] => {
   const formatter =
@@ -716,15 +707,14 @@ export const updateProductiveBox = async () => {
       },
     );
 
-  const shiftHeader = (header: string, spaces: number) => `${' '.repeat(spaces)}𖧷──〢${header}`;
-  const topLines = combineColumns(
-    ['𖧷──〢language stack', ...languageLines],
-    [shiftHeader("peak hours this year", 8), ...timeLines],
+  const topSections = renderSectionTable(
+    { title: '𖧷──〢language stack', lines: languageLines },
+    { title: '𖧷──〢peak hours this year', lines: timeLines },
   );
 
-  const bottomLines = combineColumns(
-    ["𖧷──〢stuff i’ve been building", ...projectLines],
-    [shiftHeader("how it’s been going", 7), ...monthLines],
+  const bottomSections = renderSectionTable(
+    { title: '𖧷──〢stuff i’ve been building', lines: projectLines },
+    { title: '𖧷──〢how it’s been going', lines: monthLines },
   );
 
   const owner =
@@ -821,13 +811,9 @@ export const updateProductiveBox = async () => {
     '',
     '</div>',
     '',
-    '```text',
-    ...topLines,
-    '```',
+    ...topSections,
     '',
-    '```text',
-    ...bottomLines,
-    '```',
+    ...bottomSections,
     endMarker,
   ].join('\n');
 
