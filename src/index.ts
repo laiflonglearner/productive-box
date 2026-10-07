@@ -148,9 +148,6 @@ const generateSparkleBar = (
   '✦'.repeat(filled) +
   '✧'.repeat(length - filled);
 
-/**
- * Combine two sets of lines into fixed-width columns.
- */
 const combineColumns = (
   leftLines: string[],
   rightLines: string[],
@@ -221,7 +218,7 @@ const getLastFiveMonths = (): IMonthActivity[] => {
 
       return {
         key: `${year}-${month}`,
-        label: `${month} '${year}`,
+        label: `${month} ’${year}`,
         commits: 0,
       };
     },
@@ -274,9 +271,6 @@ export const updateProductiveBox = async () => {
         committedDates,
     );
 
-  /**
-   * Time-of-day activity.
-   */
   let morning = 0;
   let daytime = 0;
   let evening = 0;
@@ -327,10 +321,6 @@ export const updateProductiveBox = async () => {
     },
   );
 
-  /**
-   * Languages.
-   */
-  // First scan is slow; later runs reuse this cache (stored in the profile repo) and only re-blame changed files.
   const cachePath = '.productive-box-cache.json';
   const cacheFile = await octokit.repos
     .getContent({ owner: 'laiflonglearner', repo: 'laiflonglearner', path: cachePath })
@@ -340,7 +330,6 @@ export const updateProductiveBox = async () => {
     try {
       languageCache = JSON.parse(Buffer.from(cacheFile.data.content, 'base64').toString('utf8'));
     } catch {
-      // unreadable cache just means a full rescan
     }
   }
   const cacheBefore = JSON.stringify(languageCache);
@@ -365,9 +354,6 @@ export const updateProductiveBox = async () => {
       ),
     );
 
-  /**
-   * Languages use 20 sparkles.
-   */
   const languageBarUnits = allocateBarUnits(
     topLanguages.map((language) => language.lines),
     20,
@@ -383,9 +369,6 @@ export const updateProductiveBox = async () => {
     ].join(' ');
   });
 
-  /**
-   * Time of day.
-   */
   const totalCommits =
     morning +
     daytime +
@@ -447,9 +430,6 @@ export const updateProductiveBox = async () => {
     ].join(' ');
   });
 
-  /**
-   * Projects.
-   */
   const projectActivity: IProjectActivity[] =
     projects
       .map((project) => {
@@ -589,9 +569,6 @@ export const updateProductiveBox = async () => {
       },
     );
 
-  /**
-   * Last five months.
-   */
   const monthlyActivity =
     getLastFiveMonths();
 
@@ -685,30 +662,17 @@ export const updateProductiveBox = async () => {
       },
     );
 
-  /**
-   * Combine dashboard columns.
-   *
-   * Top:
-   * Languages | Time of day
-   *
-   * Bottom:
-   * Projects | Last five months
-   */
-  // Bar glyphs render slightly wider than one cell, pushing row content right of its header; shift the header to match.
-  const shiftHeader = (header: string, spaces: number) => ' '.repeat(spaces) + header;
+  const shiftHeader = (header: string, spaces: number) => `${' '.repeat(spaces)}꩜ ${header}`;
   const topLines = combineColumns(
-    ['language stack', ...languageLines],
-    [shiftHeader("when i'm most active", 4), ...timeLines],
+    ['꩜ language stack', ...languageLines],
+    [shiftHeader("when i’m most active", 4), ...timeLines],
   );
 
   const bottomLines = combineColumns(
-    ["stuff i've been building", ...projectLines],
-    [shiftHeader("how it's been doing", 3), ...monthLines],
+    ["꩜ stuff i’ve been building", ...projectLines],
+    [shiftHeader("how it’s been doing", 3), ...monthLines],
   );
 
-  /**
-   * Profile README.
-   */
   const owner =
     'laiflonglearner';
 
@@ -795,14 +759,6 @@ export const updateProductiveBox = async () => {
       ? currentStatus
       : getRandomStatus(morning + daytime > evening + night, currentStatus);
 
-  /**
-   * Generate dashboard.
-   *
-   * Two normal fenced code blocks:
-   *
-   * Languages | Time of day
-   * Projects  | Last five months
-   */
   const generatedBlock = [
     startMarker,
     '<div align="center">',

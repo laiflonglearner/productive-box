@@ -329,7 +329,7 @@ test('activity and projects include older recent commits while months only inclu
   const fixture = mockDashboard({ commits: [now.toISOString(), older.toISOString()] });
   await updateProductiveBox();
   assert.match(fixture.readme(), /sleeby .*100\.0% 2 commits/);
-  const months = [...fixture.readme().matchAll(/[A-Z][a-z]{2} '\d{2} [✦✧]+ +(\d+) commits/g)];
+  const months = [...fixture.readme().matchAll(/[A-Z][a-z]{2} ’\d{2} [✦✧]+ +(\d+) commits/g)];
   assert.equal(months.length, 5);
   assert.equal(months.reduce((total, month) => total + Number(month[1]), 0), 1);
 });
