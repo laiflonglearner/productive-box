@@ -8,3 +8,5 @@ node_modules/
 
 # configuration
 .env
+# local agent skills
+.agents/
