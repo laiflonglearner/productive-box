@@ -216,16 +216,30 @@ const combineColumns = (
   });
 };
 
+const toBoldUnicode = (value: string): string =>
+  [...value]
+    .map((character) => {
+      const code = character.charCodeAt(0);
+      if (code >= 65 && code <= 90) return String.fromCodePoint(0x1d5d4 + code - 65);
+      if (code >= 97 && code <= 122) return String.fromCodePoint(0x1d5ee + code - 97);
+      return character;
+    })
+    .join('');
+
 const renderTextSection = (
   left: { title: string; lines: string[] },
   right: { title: string; lines: string[] },
-): string[] => [
-  `**${left.title}**${'\u00a0'.repeat(Math.max(2, Math.max(...left.lines.map((line) => line.length)) + 8 - left.title.length))}**${right.title}**`,
-  '',
-  '```text',
-  ...combineColumns(left.lines, right.lines),
-  '```',
-];
+): string[] => {
+  const leftWidth = Math.max(0, ...left.lines.map((line) => line.length));
+  const header = `${toBoldUnicode(left.title).padEnd(leftWidth)}${' '.repeat(8)}${toBoldUnicode(right.title)}`;
+
+  return [
+    '```text',
+    header,
+    ...combineColumns(left.lines, right.lines),
+    '```',
+  ];
+};
 
 const getLastFiveMonths = (): IMonthActivity[] => {
   const formatter =
