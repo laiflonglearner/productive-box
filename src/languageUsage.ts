@@ -72,6 +72,7 @@ export async function fetchLanguageUsage(
   octokit: Octokit,
   username: string,
   cache: LanguageCache = {},
+  include?: ReadonlySet<string>,
 ): Promise<Map<string, number>> {
   const repos = await octokit.paginate(octokit.repos.listForAuthenticatedUser, {
     affiliation: 'owner',
@@ -80,7 +81,7 @@ export async function fetchLanguageUsage(
   });
   const totals = new Map<string, number>();
   for (const repo of repos) {
-    if (repo.name === 'laiflonglearner-vault' || (repo.fork && repo.name !== 'productive-box') || repo.owner.login.toLowerCase() !== username.toLowerCase()) continue;
+    if ((include && !include.has(repo.name)) || (repo.fork && repo.name !== 'productive-box') || repo.owner.login.toLowerCase() !== username.toLowerCase()) continue;
     const snapshot = await githubQuery<{
       repository: { defaultBranchRef: { target: { oid: string; tree?: { oid: string } } } | null } | null;
     }>(`query {

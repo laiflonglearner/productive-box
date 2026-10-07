@@ -74,6 +74,18 @@ const projects: IProject[] = [
   },
 ];
 
+const languageRepos = new Set([
+  'lifelong-habit',
+  'lifelong-habit-app',
+  'thesis-research',
+  'kaggle-notebooks',
+  'laiflonglearner.com',
+  'datacamp-project-solutions',
+  'sleeby',
+  'lifelong-habit-journey',
+  'productive-box',
+]);
+
 export const getActivitySince = (now = new Date()): string => {
   const since = new Date(now);
   since.setUTCDate(since.getUTCDate() - 365);
@@ -330,7 +342,7 @@ export const updateProductiveBox = async () => {
     }
   }
   const cacheBefore = JSON.stringify(languageCache);
-  const languageTotals = await fetchLanguageUsage(octokit, username, languageCache);
+  const languageTotals = await fetchLanguageUsage(octokit, username, languageCache, languageRepos);
 
   const totalLanguageLines = Array.from(languageTotals.values()).reduce((sum, lines) => sum + lines, 0);
 
@@ -798,6 +810,9 @@ export const updateProductiveBox = async () => {
       sha: readme.data.sha,
     });
 
+  for (const key of Object.keys(languageCache)) {
+    if (!languageRepos.has(key.split('/')[1])) delete languageCache[key];
+  }
   const cacheAfter = JSON.stringify(languageCache);
   if (cacheAfter !== cacheBefore) {
     await octokit.repos
