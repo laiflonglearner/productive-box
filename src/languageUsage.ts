@@ -80,7 +80,7 @@ export async function fetchLanguageUsage(
   });
   const totals = new Map<string, number>();
   for (const repo of repos) {
-    if ((repo.fork && repo.name !== 'productive-box') || repo.owner.login.toLowerCase() !== username.toLowerCase()) continue;
+    if (repo.name === 'laiflonglearner-vault' || (repo.fork && repo.name !== 'productive-box') || repo.owner.login.toLowerCase() !== username.toLowerCase()) continue;
     const snapshot = await githubQuery<{
       repository: { defaultBranchRef: { target: { oid: string; tree?: { oid: string } } } | null } | null;
     }>(`query {
@@ -106,8 +106,10 @@ export async function fetchLanguageUsage(
     }
     const shas = new Map(allFiles.map((file) => [file.path, file.sha]));
     // Keep GitHub's existing code-language scope, excluding prose/data languages from the dashboard.
-    const languages = await octokit.repos.listLanguages({ owner: repo.owner.login, repo: repo.name });
-    const codeLanguages = new Set(Object.keys(languages.data));
+    const languages = files.length
+      ? await octokit.repos.listLanguages({ owner: repo.owner.login, repo: repo.name })
+      : undefined;
+    const codeLanguages = new Set(Object.keys(languages?.data ?? {}));
     const sourceFiles: { path: string; language: string }[] = [];
     for (let offset = 0; offset < files.length; offset += METADATA_BATCH_SIZE) {
       const paths = files.slice(offset, offset + METADATA_BATCH_SIZE);
