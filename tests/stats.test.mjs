@@ -277,7 +277,7 @@ function mockDashboard({ commits = [], failBlame = false, emptyLanguages = false
       { type: 'blob', mode: '100644', path: 'code.ts', sha: 'blob' },
     ] });
     if (String(url).endsWith('/languages')) return Response.json({ TypeScript: 50 });
-    if (options.method === 'PUT' && String(url).includes('productive-box-cache')) return Response.json({ content: {} });
+    if (options.method === 'PUT' && String(url).includes('/.productive-box-')) return Response.json({ content: {} });
     if (options.method === 'PUT') {
       writes++;
       const body = JSON.parse(options.body);

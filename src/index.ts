@@ -31,6 +31,8 @@ interface ICommitDate {
   committedDate: string;
 }
 
+type CommitCache = Record<string, { fetchedAt: string; dates: string[] }>;
+
 interface IRepoActivity {
   repo: IRepo;
   committedDates: ICommitDate[];
@@ -92,6 +94,37 @@ const frozenLanguageRepos = [
 ];
 
 const languageRepos = new Set([...activeLanguageRepos, ...frozenLanguageRepos]);
+
+const CACHE_OWNER = 'laiflonglearner';
+const CACHE_REPO = 'laiflonglearner';
+
+async function loadCache<T>(octokit: Octokit, path: string, empty: T): Promise<{ data: T; sha?: string; before: string }> {
+  const file = await octokit.repos.getContent({ owner: CACHE_OWNER, repo: CACHE_REPO, path }).catch(() => undefined);
+  if (!file || Array.isArray(file.data) || !('content' in file.data)) return { data: empty, before: JSON.stringify(empty) };
+  try {
+    const data = JSON.parse(Buffer.from(file.data.content, 'base64').toString('utf8')) as T;
+    return { data, sha: file.data.sha, before: JSON.stringify(data) };
+  } catch {
+    // an unreadable cache just means a full rescan
+    return { data: empty, sha: file.data.sha, before: JSON.stringify(empty) };
+  }
+}
+
+async function saveCache(octokit: Octokit, path: string, cache: { data: unknown; sha?: string; before: string }) {
+  const content = JSON.stringify(cache.data);
+  if (content === cache.before) return;
+  await octokit.repos
+    .createOrUpdateFileContents({
+      owner: CACHE_OWNER,
+      repo: CACHE_REPO,
+      path,
+      message: 'chore: update productive box cache',
+      content: Buffer.from(content).toString('base64'),
+      sha: cache.sha,
+    })
+    .catch((error) => console.error(`Unable to save ${path}
+${error}`));
+}
 
 export const getActivitySince = (now = new Date()): string => {
   const since = new Date(now);
@@ -272,13 +305,25 @@ export const updateProductiveBox = async () => {
   // GitHub does not list commits to a fork as contributions, so add productive-box directly.
   if (!repos.some((repo) => repo.name === 'productive-box')) repos.push({ name: 'productive-box', owner: username });
 
+  // Only commits newer than the last run are fetched; older ones come from the cache.
+  const languageCache = await loadCache<LanguageCache>(octokit, '.productive-box-cache.json', {});
+  const commitCache = await loadCache<CommitCache>(octokit, '.productive-box-commits.json', {});
+  const fetchedAt = new Date().toISOString();
   // Keep requests sequential to avoid GitHub's shared secondary concurrency limit.
   const repoActivity: IRepoActivity[] = [];
   for (const repo of repos) {
-    repoActivity.push({
-      repo,
-      committedDates: await fetchCommittedDates(id, repo.name, repo.owner, activitySince),
-    });
+    const key = `${repo.owner}/${repo.name}`;
+    const cached = commitCache.data[key];
+    // Overlap by a day so commits pushed late are still picked up.
+    const since = cached ? new Date(Date.parse(cached.fetchedAt) - 86_400_000).toISOString() : activitySince;
+    const fresh = await fetchCommittedDates(id, repo.name, repo.owner, since);
+    const dates = new Set([...(cached?.dates ?? []), ...fresh.map(({ committedDate }) => committedDate)]);
+    const recent = [...dates].filter((date) => Date.parse(date) >= Date.parse(activitySince)).sort();
+    commitCache.data[key] = { fetchedAt, dates: recent };
+    repoActivity.push({ repo, committedDates: recent.map((committedDate) => ({ committedDate })) });
+  }
+  for (const key of Object.keys(commitCache.data)) {
+    if (!repos.some((repo) => `${repo.owner}/${repo.name}` === key)) delete commitCache.data[key];
   }
 
   const allCommittedDates =
@@ -337,19 +382,7 @@ export const updateProductiveBox = async () => {
     },
   );
 
-  const cachePath = '.productive-box-cache.json';
-  const cacheFile = await octokit.repos
-    .getContent({ owner: 'laiflonglearner', repo: 'laiflonglearner', path: cachePath })
-    .catch(() => undefined);
-  let languageCache: LanguageCache = {};
-  if (cacheFile && !Array.isArray(cacheFile.data) && 'content' in cacheFile.data) {
-    try {
-      languageCache = JSON.parse(Buffer.from(cacheFile.data.content, 'base64').toString('utf8'));
-    } catch {
-    }
-  }
-  const cacheBefore = JSON.stringify(languageCache);
-  const languageTotals = await fetchLanguageUsage(octokit, username, languageCache, languageRepos, new Set(frozenLanguageRepos));
+  const languageTotals = await fetchLanguageUsage(octokit, username, languageCache.data, languageRepos, new Set(frozenLanguageRepos));
 
   const totalLanguageLines = Array.from(languageTotals.values()).reduce((sum, lines) => sum + lines, 0);
 
@@ -817,23 +850,11 @@ export const updateProductiveBox = async () => {
       sha: readme.data.sha,
     });
 
-  for (const key of Object.keys(languageCache)) {
-    if (!languageRepos.has(key.split('/')[1])) delete languageCache[key];
+  for (const key of Object.keys(languageCache.data)) {
+    if (!languageRepos.has(key.split('/')[1])) delete languageCache.data[key];
   }
-  const cacheAfter = JSON.stringify(languageCache);
-  if (cacheAfter !== cacheBefore) {
-    await octokit.repos
-      .createOrUpdateFileContents({
-        owner,
-        repo,
-        path: cachePath,
-        message: 'chore: update productive box cache',
-        content: Buffer.from(cacheAfter).toString('base64'),
-        sha: cacheFile && !Array.isArray(cacheFile.data) ? cacheFile.data.sha : undefined,
-      })
-      .catch((error) => console.error(`Unable to save language cache
-${error}`));
-  }
+  await saveCache(octokit, '.productive-box-cache.json', languageCache);
+  await saveCache(octokit, '.productive-box-commits.json', commitCache);
 
   console.log(
     `Successfully updated productive box: ${nextStatus} 🎉`,
