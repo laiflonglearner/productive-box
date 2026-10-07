@@ -694,11 +694,16 @@ export const updateProductiveBox = async () => {
    * Bottom:
    * Projects | Last five months
    */
-  const topLines = combineColumns(['language stack', ...languageLines], ["when i'm most active", ...timeLines]);
+  // Bar glyphs render slightly wider than one cell, pushing row content right of its header; shift the header to match.
+  const shiftHeader = (header: string, spaces: number) => ' '.repeat(spaces) + header;
+  const topLines = combineColumns(
+    ['language stack', ...languageLines],
+    [shiftHeader("when i'm most active", 4), ...timeLines],
+  );
 
   const bottomLines = combineColumns(
     ["stuff i've been building", ...projectLines],
-    ["how it's been doing", ...monthLines],
+    [shiftHeader("how it's been doing", 3), ...monthLines],
   );
 
   /**
