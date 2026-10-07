@@ -226,21 +226,6 @@ const toBoldUnicode = (value: string): string =>
     })
     .join('');
 
-const renderTextSection = (
-  left: { title: string; lines: string[] },
-  right: { title: string; lines: string[] },
-): string[] => {
-  const leftWidth = Math.max(0, ...left.lines.map((line) => line.length));
-  const header = `${toBoldUnicode(left.title).padEnd(leftWidth)}${' '.repeat(8)}${toBoldUnicode(right.title)}`;
-
-  return [
-    '```text',
-    header,
-    ...combineColumns(left.lines, right.lines),
-    '```',
-  ];
-};
-
 const getLastFiveMonths = (): IMonthActivity[] => {
   const formatter =
     new Intl.DateTimeFormat(
@@ -730,14 +715,15 @@ export const updateProductiveBox = async () => {
       },
     );
 
-  const topSections = renderTextSection(
-    { title: '𖧷──〢language stack', lines: languageLines },
-    { title: '𖧷──〢peak hours this year', lines: timeLines },
+  const shiftHeader = (header: string, spaces: number) => `${' '.repeat(spaces)}𖧷──〢${toBoldUnicode(header)}`;
+  const topLines = combineColumns(
+    [`𖧷──〢${toBoldUnicode('language stack')}`, ...languageLines],
+    [shiftHeader('peak hours this year', 8), ...timeLines],
   );
 
-  const bottomSections = renderTextSection(
-    { title: '𖧷──〢stuff i’ve been building', lines: projectLines },
-    { title: '𖧷──〢how it’s been going', lines: monthLines },
+  const bottomLines = combineColumns(
+    [`𖧷──〢${toBoldUnicode('stuff i’ve been building')}`, ...projectLines],
+    [shiftHeader('how it’s been going', 7), ...monthLines],
   );
 
   const owner =
@@ -834,9 +820,13 @@ export const updateProductiveBox = async () => {
     '',
     '</div>',
     '',
-    ...topSections,
+    '```text',
+    ...topLines,
+    '```',
     '',
-    ...bottomSections,
+    '```text',
+    ...bottomLines,
+    '```',
     endMarker,
   ].join('\n');
 
