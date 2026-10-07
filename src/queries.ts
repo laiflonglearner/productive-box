@@ -30,7 +30,7 @@ export const createCommittedDateQuery = (id: string, name: string, owner: string
           ... on Commit {
             history(first: 100, author: { id: ${JSON.stringify(id)} }, since: ${JSON.stringify(since)}${afterArg(after)}) {
               pageInfo { hasNextPage endCursor }
-              nodes { committedDate }
+              nodes { oid committedDate }
             }
           }
         }

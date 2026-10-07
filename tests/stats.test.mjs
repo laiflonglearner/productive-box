@@ -239,10 +239,12 @@ test('the 365-day cutoff handles leap years without mutating the input', () => {
   assert.equal(now.toISOString(), '2024-03-01T12:00:00.000Z');
 });
 
-function mockDashboard({ commits = [], failBlame = false, emptyLanguages = false } = {}) {
+function mockDashboard({ commits = [], commitCache = {}, failBlame = false, emptyLanguages = false } = {}) {
   const currentReadme = `prefix\n<!-- productive-box:start -->\n### ${daytimeFilenames[0]}\nold\n<!-- productive-box:end -->\nsuffix`;
   let updatedReadme;
   let writes = 0;
+  let savedCommitCache;
+  const historyQueries = [];
   globalThis.fetch = async (url, options = {}) => {
     if (String(url).endsWith('/graphql')) {
       const { query } = JSON.parse(options.body);
@@ -254,9 +256,12 @@ function mockDashboard({ commits = [], failBlame = false, emptyLanguages = false
           { name: 'sleeby', owner: { login: 'owner' }, isFork: false },
         ], pageInfo: { hasNextPage: false, endCursor: null } } } };
       } else if (query.includes('history(')) {
+        historyQueries.push(query);
         assert.match(query, /since: "\d{4}-\d\d-\d\dT/);
+        assert.match(query, /nodes \{ oid committedDate \}/);
         data = { repository: { defaultBranchRef: { target: { history: {
-          nodes: query.includes('name: "sleeby"') ? commits.map(committedDate => ({ committedDate })) : [],
+          nodes: query.includes('name: "sleeby"') ? commits.map((commit, index) =>
+            typeof commit === 'string' ? { oid: `commit-${index}`, committedDate: commit } : commit) : [],
           pageInfo: { hasNextPage: false, endCursor: null },
         } } } } };
       } else if (query.includes('defaultBranchRef')) data = { repository: { defaultBranchRef: {
@@ -277,6 +282,14 @@ function mockDashboard({ commits = [], failBlame = false, emptyLanguages = false
       { type: 'blob', mode: '100644', path: 'code.ts', sha: 'blob' },
     ] });
     if (String(url).endsWith('/languages')) return Response.json({ TypeScript: 50 });
+    if (String(url).includes('/.productive-box-commits.json')) {
+      if (options.method === 'PUT') {
+        savedCommitCache = JSON.parse(Buffer.from(JSON.parse(options.body).content, 'base64').toString('utf8'));
+        return Response.json({ content: {} });
+      }
+      return Response.json({ type: 'file', sha: 'cache-sha', encoding: 'base64',
+        content: Buffer.from(JSON.stringify(commitCache)).toString('base64') });
+    }
     if (options.method === 'PUT' && String(url).includes('/.productive-box-')) return Response.json({ content: {} });
     if (options.method === 'PUT') {
       writes++;
@@ -289,8 +302,44 @@ function mockDashboard({ commits = [], failBlame = false, emptyLanguages = false
       encoding: 'base64', content: Buffer.from(currentReadme).toString('base64') });
     throw new Error(`Unexpected request: ${url}`);
   };
-  return { readme: () => updatedReadme, writes: () => writes };
+  return { readme: () => updatedReadme, writes: () => writes,
+    commitCache: () => savedCommitCache, historyQueries };
 }
+
+test('timestamp-only caches rescan the full window and retain all 18 Sleeby commits', async () => {
+  const now = new Date();
+  const dates = [0, 1, 2, 3, 4].map(days => new Date(now.getTime() - days * 86_400_000).toISOString());
+  const commits = [3, 2, 11, 1, 1].flatMap((count, group) =>
+    Array.from({ length: count }, () => dates[group]));
+  const fixture = mockDashboard({ commits, commitCache: {
+    'owner/sleeby': { fetchedAt: now.toISOString(), dates },
+  } });
+  await updateProductiveBox();
+  assert.match(fixture.readme(), /sleeby .*100\.0% 18 commits/);
+  const query = fixture.historyQueries.find(query => query.includes('name: "sleeby"'));
+  const since = JSON.parse(query.match(/since: ("[^"]+")/)[1]);
+  assert.ok(Math.abs(Date.parse(since) - Date.parse(getActivitySince(now))) < 5000);
+  const saved = fixture.commitCache()['owner/sleeby'];
+  assert.equal(saved.commits.length, 18);
+  assert.equal(new Set(saved.commits.map(commit => commit.oid)).size, 18);
+  assert.equal(saved.dates, undefined);
+});
+
+test('SHA caches deduplicate overlap, retain equal timestamps, and drop expired commits', async () => {
+  const now = new Date();
+  const committedDate = now.toISOString();
+  const cached = { oid: 'existing', committedDate };
+  const fixture = mockDashboard({ commits: [cached, { oid: 'new', committedDate }], commitCache: {
+    'owner/sleeby': { fetchedAt: committedDate, commits: [cached,
+      { oid: 'expired', committedDate: new Date(now.getTime() - 366 * 86_400_000).toISOString() }],
+    },
+  } });
+  await updateProductiveBox();
+  assert.match(fixture.readme(), /sleeby .*100\.0% 2 commits/);
+  assert.deepEqual(fixture.commitCache()['owner/sleeby'].commits, [cached, { oid: 'new', committedDate }]);
+  const query = fixture.historyQueries.find(query => query.includes('name: "sleeby"'));
+  assert.ok(query.includes(`since: ${JSON.stringify(new Date(now.getTime() - 86_400_000).toISOString())}`));
+});
 
 test('zero recent commits still updates all-time language usage and preserves status and markers', async () => {
   const fixture = mockDashboard();

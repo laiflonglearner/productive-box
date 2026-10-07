@@ -7,6 +7,11 @@ export interface RepoInfo {
   isFork: boolean;
 }
 
+export interface CommitInfo {
+  oid: string;
+  committedDate: string;
+}
+
 interface Connection<T> {
   pageInfo: { hasNextPage: boolean; endCursor: string | null };
   nodes: (T | null)[] | null;
@@ -58,9 +63,9 @@ export const fetchContributedRepos = (username: string) =>
 
 export const fetchCommittedDates = (id: string, name: string, owner: string, since: string) =>
   fetchAllPages<
-    { committedDate: string },
+    CommitInfo,
     {
-      repository: { defaultBranchRef: { target: { history?: Connection<{ committedDate: string }> } } | null } | null;
+      repository: { defaultBranchRef: { target: { history?: Connection<CommitInfo> } } | null } | null;
     }
   >(
     (after) => createCommittedDateQuery(id, name, owner, since, after),

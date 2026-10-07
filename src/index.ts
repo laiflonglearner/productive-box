@@ -5,6 +5,7 @@ import { config } from 'dotenv';
 import {
   fetchCommittedDates,
   fetchContributedRepos,
+  type CommitInfo,
 } from './fetchPaginated.js';
 import {
   daytimeFilenames,
@@ -31,7 +32,7 @@ interface ICommitDate {
   committedDate: string;
 }
 
-type CommitCache = Record<string, { fetchedAt: string; dates: string[] }>;
+type CommitCache = Record<string, { fetchedAt: string; commits?: CommitInfo[]; dates?: string[] }>;
 
 interface IRepoActivity {
   repo: IRepo;
@@ -313,14 +314,18 @@ export const updateProductiveBox = async () => {
   const repoActivity: IRepoActivity[] = [];
   for (const repo of repos) {
     const key = `${repo.owner}/${repo.name}`;
-    const cached = commitCache.data[key];
+    const entry = commitCache.data[key];
+    // Timestamp-only caches lost commits made in the same second; rebuild them by SHA.
+    const cached = entry?.commits ? entry : undefined;
     // Overlap by a day so commits pushed late are still picked up.
     const since = cached ? new Date(Date.parse(cached.fetchedAt) - 86_400_000).toISOString() : activitySince;
     const fresh = await fetchCommittedDates(id, repo.name, repo.owner, since);
-    const dates = new Set([...(cached?.dates ?? []), ...fresh.map(({ committedDate }) => committedDate)]);
-    const recent = [...dates].filter((date) => Date.parse(date) >= Date.parse(activitySince)).sort();
-    commitCache.data[key] = { fetchedAt, dates: recent };
-    repoActivity.push({ repo, committedDates: recent.map((committedDate) => ({ committedDate })) });
+    const commits = new Map([...(cached?.commits ?? []), ...fresh].map((commit) => [commit.oid, commit]));
+    const recent = [...commits.values()]
+      .filter(({ committedDate }) => Date.parse(committedDate) >= Date.parse(activitySince))
+      .sort((a, b) => a.committedDate.localeCompare(b.committedDate) || a.oid.localeCompare(b.oid));
+    commitCache.data[key] = { fetchedAt, commits: recent };
+    repoActivity.push({ repo, committedDates: recent });
   }
   for (const key of Object.keys(commitCache.data)) {
     if (!repos.some((repo) => `${repo.owner}/${repo.name}` === key)) delete commitCache.data[key];
