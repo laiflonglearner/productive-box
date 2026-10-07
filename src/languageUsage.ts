@@ -9,12 +9,16 @@ const BLAME_BATCH_SIZE = 10;
 
 /** Get every current path, falling back to subtree traversal if GitHub truncates the recursive tree. */
 export async function fetchCurrentFiles(octokit: Octokit, owner: string, repo: string, treeSha: string) {
+  return (await listFiles(octokit, owner, repo, treeSha)).map((file) => file.path);
+}
+
+async function listFiles(octokit: Octokit, owner: string, repo: string, treeSha: string) {
   const recursive = await octokit.git.getTree({ owner, repo, tree_sha: treeSha, recursive: '1' });
   const isFile = <T extends { type?: string; mode?: string; path?: string }>(item: T): item is T & { path: string } =>
     item.type === 'blob' && item.mode !== '120000' && typeof item.path === 'string';
-  if (!recursive.data.truncated) return recursive.data.tree.filter(isFile).map((item) => item.path);
+  if (!recursive.data.truncated) return recursive.data.tree.filter(isFile).map((item) => ({ path: item.path, sha: item.sha ?? '' }));
 
-  const files: string[] = [];
+  const files: { path: string; sha: string }[] = [];
   const pending = [{ sha: treeSha, prefix: '' }];
   while (pending.length) {
     const next = pending.pop();
@@ -24,7 +28,7 @@ export async function fetchCurrentFiles(octokit: Octokit, owner: string, repo: s
     for (const item of tree.data.tree) {
       if (!item.path) throw new Error(`Missing tree path for ${owner}/${repo}`);
       const path = `${next.prefix}${item.path}`;
-      if (isFile(item)) files.push(path);
+      if (isFile(item)) files.push({ path, sha: item.sha ?? '' });
       if (item.type === 'tree') {
         if (!item.sha) throw new Error(`Missing subtree SHA for ${owner}/${repo}/${path}`);
         pending.push({ sha: item.sha, prefix: `${path}/` });
@@ -54,8 +58,18 @@ async function fetchMetadata(owner: string, repo: string, oid: string, paths: st
   }
 }
 
-/** Aggregate present-day, account-attributed lines with no commit-date cutoff. */
-export async function fetchLanguageUsage(octokit: Octokit, username: string): Promise<Map<string, number>> {
+/** Per repo, per path: the blob SHA that was scanned and what it contributed ('' language = not counted). */
+export type LanguageCache = Record<string, Record<string, { sha: string; language: string; lines: number }>>;
+
+/**
+ * Aggregate present-day, account-attributed lines with no commit-date cutoff.
+ * Files whose blob SHA is unchanged since the cached scan are reused, so only changed files are re-blamed.
+ */
+export async function fetchLanguageUsage(
+  octokit: Octokit,
+  username: string,
+  cache: LanguageCache = {},
+): Promise<Map<string, number>> {
   const repos = await octokit.paginate(octokit.repos.listForAuthenticatedUser, {
     affiliation: 'owner',
     visibility: 'all',
@@ -77,7 +91,17 @@ export async function fetchLanguageUsage(octokit: Octokit, username: string): Pr
     if (!repository.defaultBranchRef) continue;
     const commit = repository.defaultBranchRef.target;
     if (!commit.tree) throw new Error(`Default branch of ${repo.full_name} is not a commit`);
-    const files = await fetchCurrentFiles(octokit, repo.owner.login, repo.name, commit.tree.oid);
+    const allFiles = await listFiles(octokit, repo.owner.login, repo.name, commit.tree.oid);
+    const previous = cache[repo.full_name] ?? {};
+    const scanned: LanguageCache[string] = {};
+    const files: string[] = [];
+    for (const file of allFiles) {
+      const hit = previous[file.path];
+      // ponytail: unchanged blob assumed to keep its blame attribution; clear the cache file to force a rescan
+      if (file.sha && hit?.sha === file.sha) scanned[file.path] = hit;
+      else files.push(file.path);
+    }
+    const shas = new Map(allFiles.map((file) => [file.path, file.sha]));
     // Keep GitHub's existing code-language scope, excluding prose/data languages from the dashboard.
     const languages = await octokit.repos.listLanguages({ owner: repo.owner.login, repo: repo.name });
     const codeLanguages = new Set(Object.keys(languages.data));
@@ -87,6 +111,7 @@ export async function fetchLanguageUsage(octokit: Octokit, username: string): Pr
       const metadata = await fetchMetadata(repo.owner.login, repo.name, commit.oid, paths);
       for (const [index, path] of paths.entries()) {
         const file = metadata[index];
+        scanned[path] = { sha: shas.get(path) ?? '', language: '', lines: 0 };
         // GitHub cannot resolve files over 10MB; they are not meaningful source code, so skip them.
         if (file === 'skip') continue;
         if (!file) throw new Error(`File metadata unavailable for ${repo.full_name}/${path}`);
@@ -107,8 +132,12 @@ export async function fetchLanguageUsage(octokit: Octokit, username: string): Pr
         batch.map((file) => file.path),
       );
       for (const [index, file] of batch.entries()) {
-        if (lines[index] > 0) totals.set(file.language, (totals.get(file.language) ?? 0) + lines[index]);
+        scanned[file.path] = { ...scanned[file.path], language: file.language, lines: lines[index] };
       }
+    }
+    cache[repo.full_name] = scanned;
+    for (const { language, lines } of Object.values(scanned)) {
+      if (language && lines > 0) totals.set(language, (totals.get(language) ?? 0) + lines);
     }
   }
   return totals;

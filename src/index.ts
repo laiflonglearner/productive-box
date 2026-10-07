@@ -12,7 +12,7 @@ import {
 } from './filenames.js';
 import generateBarChart from './generateBarChart.js';
 import githubQuery from './githubQuery.js';
-import { fetchLanguageUsage } from './languageUsage.js';
+import { fetchLanguageUsage, type LanguageCache } from './languageUsage.js';
 import { userInfoQuery } from './queries.js';
 
 config({ path: ['.env'] });
@@ -330,7 +330,21 @@ export const updateProductiveBox = async () => {
   /**
    * Languages.
    */
-  const languageTotals = await fetchLanguageUsage(octokit, username);
+  // First scan is slow; later runs reuse this cache (stored in the profile repo) and only re-blame changed files.
+  const cachePath = '.productive-box-cache.json';
+  const cacheFile = await octokit.repos
+    .getContent({ owner: 'laiflonglearner', repo: 'laiflonglearner', path: cachePath })
+    .catch(() => undefined);
+  let languageCache: LanguageCache = {};
+  if (cacheFile && !Array.isArray(cacheFile.data) && 'content' in cacheFile.data) {
+    try {
+      languageCache = JSON.parse(Buffer.from(cacheFile.data.content, 'base64').toString('utf8'));
+    } catch {
+      // unreadable cache just means a full rescan
+    }
+  }
+  const cacheBefore = JSON.stringify(languageCache);
+  const languageTotals = await fetchLanguageUsage(octokit, username, languageCache);
 
   const totalLanguageLines = Array.from(languageTotals.values()).reduce((sum, lines) => sum + lines, 0);
 
@@ -825,6 +839,21 @@ export const updateProductiveBox = async () => {
       ).toString('base64'),
       sha: readme.data.sha,
     });
+
+  const cacheAfter = JSON.stringify(languageCache);
+  if (cacheAfter !== cacheBefore) {
+    await octokit.repos
+      .createOrUpdateFileContents({
+        owner,
+        repo,
+        path: cachePath,
+        message: 'chore: update productive box cache',
+        content: Buffer.from(cacheAfter).toString('base64'),
+        sha: cacheFile && !Array.isArray(cacheFile.data) ? cacheFile.data.sha : undefined,
+      })
+      .catch((error) => console.error(`Unable to save language cache
+${error}`));
+  }
 
   console.log(
     `Successfully updated productive box: ${nextStatus} 🎉`,

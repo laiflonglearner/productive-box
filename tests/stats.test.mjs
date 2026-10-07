@@ -277,6 +277,7 @@ function mockDashboard({ commits = [], failBlame = false, emptyLanguages = false
       { type: 'blob', mode: '100644', path: 'code.ts', sha: 'blob' },
     ] });
     if (String(url).endsWith('/languages')) return Response.json({ TypeScript: 50 });
+    if (options.method === 'PUT' && String(url).includes('productive-box-cache')) return Response.json({ content: {} });
     if (options.method === 'PUT') {
       writes++;
       const body = JSON.parse(options.body);
@@ -337,4 +338,30 @@ test('an incomplete language scan never writes the README', async () => {
   const fixture = mockDashboard({ failBlame: true });
   await assert.rejects(updateProductiveBox(), /Blame failed/);
   assert.equal(fixture.writes(), 0);
+});
+
+test('unchanged files are reused from the cache and not re-queried', async () => {
+  const octokit = {
+    paginate: async () => [{ name: 'repo', owner: { login: 'owner' }, full_name: 'owner/repo', fork: false }],
+    repos: { listForAuthenticatedUser() {}, listLanguages: async () => ({ data: { TypeScript: 1 } }) },
+    git: { getTree: async () => ({ data: { truncated: false,
+      tree: [{ type: 'blob', mode: '100644', path: 'a.ts', sha: 'blob1' }] } }) },
+  };
+  let queries = 0;
+  globalThis.fetch = async (_url, options) => {
+    queries++;
+    const { query } = JSON.parse(options.body);
+    const data = query.includes('defaultBranchRef')
+      ? { repository: { defaultBranchRef: { target: { oid: 'c', tree: { oid: 't' } } } } }
+      : query.includes('file(path:')
+        ? { repository: { object: { file0: { language: { name: 'TypeScript' }, isGenerated: false, object: { isBinary: false } } } } }
+        : { repository: { object: { file0: { ranges: [{ startingLine: 1, endingLine: 5,
+          commit: { author: { user: { login: 'owner' } } } }] } } } };
+    return Response.json({ data });
+  };
+  const cache = {};
+  assert.deepEqual(Object.fromEntries(await fetchLanguageUsage(octokit, 'owner', cache)), { TypeScript: 5 });
+  const first = queries;
+  assert.deepEqual(Object.fromEntries(await fetchLanguageUsage(octokit, 'owner', cache)), { TypeScript: 5 });
+  assert.equal(queries - first, 1); // only the head-commit lookup
 });
