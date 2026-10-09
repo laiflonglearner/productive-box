@@ -125,7 +125,7 @@ const getTimeLines = (activity: TimeActivity): string[] => {
       commits: morning,
     },
     {
-      label: '🍊 النهار',
+      label: '🥭 النهار',
       range: '1pm-5pm',
       commits: daytime,
     },
