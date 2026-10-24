@@ -102,12 +102,12 @@ const getLanguageLines = (
   language: DashboardStats['language'],
 ): string[] => {
   const languageWidth = Math.max(0, ...language.top.map((item) => item.name.length));
-  const languageBarUnits = allocateBarUnits(language.top.map((item) => item.lines), 18);
+  const languageBarUnits = allocateBarUnits(language.top.map((item) => item.lines), 17);
   const languageLines = language.top.map((item, index) => {
     const percent = language.totalLines ? (item.lines / language.totalLines) * 100 : 0;
     return [
       item.name.padEnd(languageWidth),
-      generateSparkleBar(languageBarUnits[index], 18),
+      generateSparkleBar(languageBarUnits[index], 17),
       `${percent.toFixed(1).padStart(5)}%`,
     ].join(' ');
   });
@@ -147,7 +147,7 @@ const getTimeLines = (activity: TimeActivity): string[] => {
         (period) =>
           period.commits,
       ),
-      15,
+      16,
     );
 
   const timeCommitWidth =
@@ -166,7 +166,7 @@ const getTimeLines = (activity: TimeActivity): string[] => {
     return [
       `${period.commits.toString().padStart(timeCommitWidth)} commits`,
       `${percent.toFixed(1).padStart(5)}%`,
-      generateSparkleBar(timeBarUnits[index], 15),
+      generateSparkleBar(timeBarUnits[index], 16),
       `\u2066${period.label.split(' ')[0]} ${period.range} ${period.label.split(' ').slice(1).join(' ')}\u2069`,
     ].join(' ');
   });
