@@ -25,23 +25,38 @@ export async function loadCache<T>(
   }
 }
 
-export async function saveCache<T>(
-  octokit: Octokit,
-  path: string,
-  cache: CacheSnapshot<T>,
-) {
-  const content = JSON.stringify(cache.data);
-  if (content === cache.before) return;
-  await octokit.repos
-    .createOrUpdateFileContents({
-      owner: CACHE_OWNER,
-      repo: CACHE_REPO,
-      path,
-      message: 'chore: update productive box cache',
-      content: Buffer.from(content).toString('base64'),
-      sha: cache.sha,
-    })
-    .catch((error) => console.error(`Unable to save ${path}
-${error}`));
+export interface FileChange {
+  path: string;
+  content: string;
 }
 
+// Returns the cache file to write, or undefined when nothing changed.
+export function cacheChange<T>(path: string, cache: CacheSnapshot<T>): FileChange | undefined {
+  const content = JSON.stringify(cache.data);
+  return content === cache.before ? undefined : { path, content };
+}
+
+// Writes every file in one commit; the contents API would make one commit per file.
+export async function commitFiles(octokit: Octokit, files: FileChange[], message: string) {
+  if (!files.length) return;
+  const owner = CACHE_OWNER;
+  const repo = CACHE_REPO;
+  const { data: repository } = await octokit.repos.get({ owner, repo });
+  const ref = `heads/${repository.default_branch}`;
+  const { data: head } = await octokit.git.getRef({ owner, repo, ref });
+  const { data: parent } = await octokit.git.getCommit({ owner, repo, commit_sha: head.object.sha });
+  const { data: tree } = await octokit.git.createTree({
+    owner,
+    repo,
+    base_tree: parent.tree.sha,
+    tree: files.map(({ path, content }) => ({ path, mode: '100644' as const, type: 'blob' as const, content })),
+  });
+  const { data: commit } = await octokit.git.createCommit({
+    owner,
+    repo,
+    message,
+    tree: tree.sha,
+    parents: [head.object.sha],
+  });
+  await octokit.git.updateRef({ owner, repo, ref, sha: commit.sha });
+}

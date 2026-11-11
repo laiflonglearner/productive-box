@@ -241,9 +241,8 @@ test('the 365-day cutoff handles leap years without mutating the input', () => {
 
 function mockDashboard({ commits = [], commitCache = {}, failBlame = false, emptyLanguages = false } = {}) {
   const currentReadme = `prefix\n<!-- productive-box:start -->\n### ${daytimeFilenames[0]}\nold\n<!-- productive-box:end -->\nsuffix`;
-  let updatedReadme;
+  const files = {};
   let writes = 0;
-  let savedCommitCache;
   const historyQueries = [];
   globalThis.fetch = async (url, options = {}) => {
     if (String(url).endsWith('/graphql')) {
@@ -282,28 +281,36 @@ function mockDashboard({ commits = [], commitCache = {}, failBlame = false, empt
       { type: 'blob', mode: '100644', path: 'code.ts', sha: 'blob' },
     ] });
     if (String(url).endsWith('/languages')) return Response.json({ TypeScript: 50 });
-    if (String(url).includes('/.productive-box-commits.json')) {
-      if (options.method === 'PUT') {
-        savedCommitCache = JSON.parse(Buffer.from(JSON.parse(options.body).content, 'base64').toString('utf8'));
-        return Response.json({ content: {} });
-      }
-      return Response.json({ type: 'file', sha: 'cache-sha', encoding: 'base64',
-        content: Buffer.from(JSON.stringify(commitCache)).toString('base64') });
-    }
-    if (options.method === 'PUT' && String(url).includes('/.productive-box-')) return Response.json({ content: {} });
-    if (options.method === 'PUT') {
-      writes++;
-      const body = JSON.parse(options.body);
-      assert.equal(body.sha, 'readme-sha');
-      updatedReadme = Buffer.from(body.content, 'base64').toString('utf8');
-      return Response.json({ content: { sha: 'new-sha' } });
-    }
+    const method = options.method ?? 'GET';
+    if (String(url).includes('/contents/.productive-box-commits.json')) return Response.json({ type: 'file',
+      sha: 'cache-sha', encoding: 'base64', content: Buffer.from(JSON.stringify(commitCache)).toString('base64') });
+    if (String(url).includes('/contents/.productive-box-')) return Response.json({}, { status: 404 });
     if (String(url).includes('/contents/README.md')) return Response.json({ type: 'file', sha: 'readme-sha',
       encoding: 'base64', content: Buffer.from(currentReadme).toString('base64') });
+    if (method === 'GET' && /\/repos\/[^/]+\/[^/]+$/.test(String(url))) return Response.json({ default_branch: 'main' });
+    if (String(url).includes('/git/ref/heads%2Fmain')) return Response.json({ object: { sha: 'head-sha' } });
+    if (String(url).includes('/git/commits/head-sha')) return Response.json({ sha: 'head-sha', tree: { sha: 'base-tree' } });
+    if (method === 'POST' && String(url).endsWith('/git/trees')) {
+      const body = JSON.parse(options.body);
+      assert.equal(body.base_tree, 'base-tree');
+      for (const { path, content } of body.tree) files[path] = content;
+      return Response.json({ sha: 'new-tree' });
+    }
+    if (method === 'POST' && String(url).endsWith('/git/commits')) {
+      writes++;
+      const body = JSON.parse(options.body);
+      assert.equal(body.tree, 'new-tree');
+      assert.deepEqual(body.parents, ['head-sha']);
+      return Response.json({ sha: 'new-commit' });
+    }
+    if (method === 'PATCH' && String(url).includes('/git/refs/heads%2Fmain')) {
+      assert.equal(JSON.parse(options.body).sha, 'new-commit');
+      return Response.json({});
+    }
     throw new Error(`Unexpected request: ${url}`);
   };
-  return { readme: () => updatedReadme, writes: () => writes,
-    commitCache: () => savedCommitCache, historyQueries };
+  return { readme: () => files['README.md'], writes: () => writes,
+    commitCache: () => JSON.parse(files['.productive-box-commits.json']), historyQueries };
 }
 
 test('timestamp-only caches rescan the full window and retain all 18 Sleeby commits', async () => {

@@ -6,10 +6,11 @@ import {
   type RenderedDashboard,
 } from './dashboardRenderer.js';
 
+// Builds the updated README; the caller commits it together with the cache files.
 export async function updateProfileReadme(
   octokit: Octokit,
   renderDashboard: (currentStatus: string) => RenderedDashboard,
-): Promise<string | undefined> {
+): Promise<{ status: string; content: string } | undefined> {
   const owner = 'laiflonglearner';
   const repo = 'laiflonglearner';
   const path = 'README.md';
@@ -46,14 +47,5 @@ export async function updateProfileReadme(
     rendered.block +
     currentReadme.slice(endIndex + PRODUCTIVE_BOX_END_MARKER.length);
 
-  await octokit.repos.createOrUpdateFileContents({
-    owner,
-    repo,
-    path,
-    message: 'chore: update productive box',
-    content: Buffer.from(updatedReadme).toString('base64'),
-    sha: readme.data.sha,
-  });
-
-  return rendered.status;
+  return { status: rendered.status, content: updatedReadme };
 }

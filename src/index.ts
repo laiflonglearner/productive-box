@@ -14,7 +14,7 @@ import {
   type IRepo,
   type IRepoActivity,
 } from './dashboardStats.js';
-import { loadCache, saveCache } from './githubCache.js';
+import { cacheChange, commitFiles, loadCache, type FileChange } from './githubCache.js';
 import githubQuery from './githubQuery.js';
 import { fetchLanguageUsage, type LanguageCache } from './languageUsage.js';
 import { updateProfileReadme } from './profileReadme.js';
@@ -106,20 +106,24 @@ export const updateProductiveBox = async () => {
   const languageTotals = await fetchLanguageUsage(octokit, username, languageCache.data, languageRepos, new Set(frozenLanguageRepos));
   const dashboardStats = getDashboardStats(repoActivity, languageTotals, timeActivity);
 
-  const nextStatus = await updateProfileReadme(octokit, (currentStatus) =>
+  const readme = await updateProfileReadme(octokit, (currentStatus) =>
     renderDashboardBlock(dashboardStats, currentStatus),
   );
 
-  if (!nextStatus) return;
+  if (!readme) return;
 
   for (const key of Object.keys(languageCache.data)) {
     if (!languageRepos.has(key.split('/')[1])) delete languageCache.data[key];
   }
-  await saveCache(octokit, '.productive-box-cache.json', languageCache);
-  await saveCache(octokit, '.productive-box-commits.json', commitCache);
+  const changes: FileChange[] = [
+    { path: 'README.md', content: readme.content },
+    cacheChange('.productive-box-cache.json', languageCache),
+    cacheChange('.productive-box-commits.json', commitCache),
+  ].filter((change): change is FileChange => !!change);
+  await commitFiles(octokit, changes, 'chore: update productive box');
 
   console.log(
-    `Successfully updated productive box: ${nextStatus} 🎉`,
+    `Successfully updated productive box: ${readme.status} 🎉`,
   );
 };
 
